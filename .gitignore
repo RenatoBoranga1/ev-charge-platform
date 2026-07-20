@@ -1,0 +1,13 @@
+node_modules/
+.pnpm-store/
+.turbo/
+.expo/
+dist/
+coverage/
+*.log
+.env
+.env.local
+apps/mobile-driver/.expo/
+apps/mobile-driver/android/
+apps/mobile-driver/ios/
+apps/mobile-driver/dist/
