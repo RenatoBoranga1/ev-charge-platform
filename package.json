@@ -13,7 +13,12 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "check": "pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "dev:backend": "pnpm --filter @solis/backend dev",
+    "db:generate": "pnpm --filter @solis/database prisma:generate",
+    "db:migrate": "pnpm --filter @solis/database migrate:deploy",
+    "db:seed": "pnpm --filter @solis/database seed",
+    "postinstall": "pnpm --filter @solis/database prisma:generate"
   },
   "devDependencies": {
     "prettier": "^3.6.2",

@@ -2,16 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
+import { useAuth } from '@/auth/AuthProvider';
 import { AppCard } from '@/components/AppCard';
 import { AppHeader } from '@/components/AppHeader';
 import { ProfileMenuRow } from '@/components/ProfileMenuRow';
 import { Screen } from '@/components/Screen';
-import { mockProfile } from '@/mocks/data';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { formatCurrency } from '@/utils/format';
 
 export default function ProfileScreen() {
+  const { signOut, user } = useAuth();
   const { colors } = useAppTheme();
+
+  if (!user) return null;
 
   return (
     <Screen>
@@ -25,9 +28,9 @@ export default function ProfileScreen() {
           <Text style={[styles.initials, { color: colors.onPrimary }]}>MS</Text>
         </View>
         <View style={styles.profileCopy}>
-          <Text style={[styles.name, { color: colors.text }]}>{mockProfile.name}</Text>
+          <Text style={[styles.name, { color: colors.text }]}>{user.name}</Text>
           <Text style={[styles.email, { color: colors.textMuted }]}>
-            {mockProfile.email}
+            {user.email}
           </Text>
         </View>
       </View>
@@ -36,22 +39,22 @@ export default function ProfileScreen() {
         <ProfileMetric
           icon="flash-outline"
           label="Energia"
-          value={mockProfile.totalEnergyKwh.toFixed(1) + ' kWh'}
+          value={user.totalEnergyKwh.toFixed(1) + ' kWh'}
         />
         <ProfileMetric
           icon="leaf-outline"
           label="CO₂ evitado"
-          value={mockProfile.avoidedCo2Kg.toFixed(1) + ' kg'}
+          value={user.avoidedCo2Kg.toFixed(1) + ' kg'}
         />
         <ProfileMetric
           icon="receipt-outline"
           label="Sessões"
-          value={String(mockProfile.chargingSessions)}
+          value={String(user.chargingSessions)}
         />
         <ProfileMetric
           icon="wallet-outline"
           label="Economia"
-          value={formatCurrency(mockProfile.estimatedSavings)}
+          value={formatCurrency(user.estimatedSavings)}
         />
       </View>
 
@@ -98,7 +101,7 @@ export default function ProfileScreen() {
           onPress={() =>
             Alert.alert(
               'Excluir conta',
-              'O modo demonstração não envia a solicitação. Em produção, este fluxo exigirá nova autenticação.',
+              'Esta ação exigirá confirmação e uma nova autenticação antes de remover os dados.',
             )
           }
         />
@@ -106,11 +109,9 @@ export default function ProfileScreen() {
           icon="log-out-outline"
           label="Sair"
           danger
-          onPress={() =>
-            Alert.alert('Sessão encerrada', 'Logout mock concluído.', [
-              { text: 'OK', onPress: () => router.replace('/(auth)/login') },
-            ])
-          }
+          onPress={() => {
+            void signOut().then(() => router.replace('/'));
+          }}
         />
       </AppCard>
     </Screen>

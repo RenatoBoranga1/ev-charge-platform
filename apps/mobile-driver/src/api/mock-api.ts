@@ -1,29 +1,37 @@
 import type {
   ApiClients,
+  AuthApi,
   ChargingApi,
   PaymentsApi,
   RoutePlannerProvider,
   StartChargingInput,
   StationsApi,
+  UsersApi,
   VehiclesApi,
 } from './contracts';
 import {
   ids,
   mockHistory,
   mockPaymentMethods,
+  mockProfile,
   mockReservations,
   mockStations,
   mockVehicles,
 } from '@/mocks/data';
 import type {
+  AuthSession,
+  AuthTokens,
   ChargingSession,
   ChargingSummary,
+  LoginInput,
   PaymentMethod,
+  RegisterInput,
   Reservation,
   RoutePlannerInput,
   RoutePlannerResult,
   Station,
   StationFilters,
+  UserProfile,
   ValidatedConnector,
   Vehicle,
 } from '@/types/domain';
@@ -32,11 +40,73 @@ import {
   estimateAvoidedCo2,
 } from '@/utils/charging';
 import { normalizeManualConnectorCode } from '@/utils/manual-code';
-import { parseChargeQr } from '@/utils/qr-parser';
+import type { ChargeQrPayload } from '@/utils/qr-parser';
 import { filterStations } from '@/utils/station-filters';
 
 const wait = async (milliseconds = 280): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const demoCredentials = {
+  email: 'marina.souza@example.com',
+  password: 'solis-demo',
+};
+
+let mockIdentity = {
+  email: demoCredentials.email,
+  password: demoCredentials.password,
+  user: mockProfile,
+};
+
+function createMockTokens(): AuthTokens {
+  return {
+    accessToken: `mock-access-${Date.now()}`,
+    refreshToken: `mock-refresh-${Date.now()}`,
+  };
+}
+
+export class MockAuthApi implements AuthApi {
+  async register(input: RegisterInput): Promise<AuthSession> {
+    await wait();
+    const user: UserProfile = {
+      ...mockProfile,
+      id: `user-${Date.now()}`,
+      name: input.name,
+      email: input.email.trim().toLowerCase(),
+      totalEnergyKwh: 0,
+      avoidedCo2Kg: 0,
+      chargingSessions: 0,
+      estimatedSavings: 0,
+    };
+    mockIdentity = { email: user.email, password: input.password, user };
+    return { user, tokens: createMockTokens() };
+  }
+
+  async login(input: LoginInput): Promise<AuthSession> {
+    await wait();
+    if (
+      input.email.trim().toLowerCase() !== mockIdentity.email ||
+      input.password !== mockIdentity.password
+    ) {
+      throw new Error('E-mail ou senha inválidos.');
+    }
+    return { user: mockIdentity.user, tokens: createMockTokens() };
+  }
+
+  async refresh(refreshToken: string): Promise<AuthTokens> {
+    await wait();
+    if (!refreshToken.startsWith('mock-refresh-')) {
+      throw new Error('Sessão expirada.');
+    }
+    return createMockTokens();
+  }
+}
+
+export class MockUsersApi implements UsersApi {
+  async getMe(): Promise<UserProfile> {
+    await wait();
+    return mockIdentity.user;
+  }
+}
 
 let vehicleState = [...mockVehicles];
 let paymentState = [...mockPaymentMethods];
@@ -110,9 +180,8 @@ export class MockStationsApi implements StationsApi {
 }
 
 export class MockChargingApi implements ChargingApi {
-  async validateQr(rawValue: string): Promise<ValidatedConnector> {
+  async validateQr(payload: ChargeQrPayload): Promise<ValidatedConnector> {
     await wait();
-    const payload = parseChargeQr(rawValue);
     return findConnector((connectorId) => connectorId === payload.connectorId);
   }
 
@@ -315,6 +384,8 @@ export class MockRoutePlannerProvider implements RoutePlannerProvider {
 
 export function createMockApiClients(): ApiClients {
   return {
+    auth: new MockAuthApi(),
+    users: new MockUsersApi(),
     stations: new MockStationsApi(),
     charging: new MockChargingApi(),
     vehicles: new MockVehiclesApi(),

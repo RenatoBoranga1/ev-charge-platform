@@ -1,0 +1,87 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.5
+    environment:
+      POSTGRES_DB: solis
+      POSTGRES_PASSWORD: solis
+      POSTGRES_USER: solis
+    ports:
+      - "5432:5432"
+    volumes:
+      - solis_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U solis -d solis"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4.9-alpine3.21
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - solis_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.30.3
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      CORS_ORIGIN: "*"
+      DATABASE_URL: postgresql://solis:solis@postgres:5432/solis?schema=public
+      DEFAULT_TENANT_SLUG: solis
+      DEMO_USER_PASSWORD: solis-demo
+      JWT_ACCESS_SECRET: local-compose-secret-change-before-production
+      NODE_ENV: development
+      PORT: 8000
+      REDIS_URL: redis://redis:6379
+      REFRESH_TOKEN_TTL_DAYS: 30
+      SEED_DEMO_DATA: "true"
+    command:
+      - sh
+      - -c
+      - >-
+        pnpm --filter @solis/database migrate:deploy &&
+        pnpm --filter @solis/database seed &&
+        node apps/backend/dist/main.js
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: "on-failure:5"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:8000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  solis_postgres_data:
+  solis_redis_data:

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const qrPayloadSchema = z.object({
+const jsonQrPayloadSchema = z.object({
   version: z.literal(1),
   type: z.literal('EV_CONNECTOR'),
   stationId: z.string().uuid(),
@@ -9,7 +9,16 @@ const qrPayloadSchema = z.object({
   connectorId: z.string().uuid(),
 });
 
-export type ChargeQrPayload = z.infer<typeof qrPayloadSchema>;
+export type JsonChargeQrPayload = z.infer<typeof jsonQrPayloadSchema> & { source: 'json' };
+
+export type DeepLinkChargeQrPayload = {
+  source: 'deep-link';
+  version: 1;
+  type: 'EV_CONNECTOR';
+  connectorId: string;
+};
+
+export type ChargeQrPayload = JsonChargeQrPayload | DeepLinkChargeQrPayload;
 
 const supportedSchemes = ['solis:', 'voltway:'] as const;
 
@@ -18,7 +27,7 @@ export function parseChargeQr(rawValue: string): ChargeQrPayload {
 
   if (trimmedValue.startsWith('{')) {
     const parsed: unknown = JSON.parse(trimmedValue);
-    return qrPayloadSchema.parse(parsed);
+    return { source: 'json', ...jsonQrPayloadSchema.parse(parsed) };
   }
 
   const url = new URL(trimmedValue);
@@ -39,11 +48,9 @@ export function parseChargeQr(rawValue: string): ChargeQrPayload {
   }
 
   return {
+    source: 'deep-link',
     version: 1,
     type: 'EV_CONNECTOR',
-    stationId: '00000000-0000-4000-8000-000000000000',
-    chargePointId: '00000000-0000-4000-8000-000000000000',
-    evseId: '00000000-0000-4000-8000-000000000000',
     connectorId: z.string().uuid().parse(pathSegments[2]),
   };
 }
