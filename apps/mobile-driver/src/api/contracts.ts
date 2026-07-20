@@ -1,16 +1,32 @@
+import type { ChargeQrPayload } from '@/utils/qr-parser';
 import type {
+  AuthSession,
+  AuthTokens,
   ChargingHistoryItem,
   ChargingSession,
   ChargingSummary,
   PaymentMethod,
   Reservation,
   RoutePlannerInput,
+  LoginInput,
+  RegisterInput,
   RoutePlannerResult,
   Station,
   StationFilters,
+  UserProfile,
   ValidatedConnector,
   Vehicle,
 } from '@/types/domain';
+
+export interface AuthApi {
+  register(input: RegisterInput): Promise<AuthSession>;
+  login(input: LoginInput): Promise<AuthSession>;
+  refresh(refreshToken: string): Promise<AuthTokens>;
+}
+
+export interface UsersApi {
+  getMe(): Promise<UserProfile>;
+}
 
 export interface StationsApi {
   getNearby(filters: StationFilters): Promise<Station[]>;
@@ -27,7 +43,7 @@ export interface StartChargingInput {
 }
 
 export interface ChargingApi {
-  validateQr(rawValue: string): Promise<ValidatedConnector>;
+  validateQr(payload: ChargeQrPayload): Promise<ValidatedConnector>;
   validateManualCode(code: string): Promise<ValidatedConnector>;
   start(input: StartChargingInput): Promise<ChargingSession>;
   getActive(): Promise<ChargingSession | null>;
@@ -54,6 +70,8 @@ export interface RoutePlannerProvider {
 }
 
 export interface ApiClients {
+  auth: AuthApi;
+  users: UsersApi;
   stations: StationsApi;
   charging: ChargingApi;
   vehicles: VehiclesApi;

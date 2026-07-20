@@ -7,6 +7,7 @@ allowBuilds:
 
 onlyBuiltDependencies:
   - '@prisma/client'
+  - argon2
   - '@prisma/engines'
   - esbuild
   - prisma

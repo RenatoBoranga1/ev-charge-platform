@@ -13,6 +13,7 @@ import { PermissionState } from '@/components/AsyncState';
 import { Screen } from '@/components/Screen';
 import { messages } from '@/i18n/pt-BR';
 import { useChargingStore } from '@/stores/charging-store';
+import { parseChargeQr } from '@/utils/qr-parser';
 import { useAppTheme } from '@/theme/ThemeProvider';
 
 export default function ScannerScreen() {
@@ -24,7 +25,7 @@ export default function ScannerScreen() {
     (state) => state.setValidatedConnector,
   );
   const mutation = useMutation({
-    mutationFn: (rawValue: string) => api.charging.validateQr(rawValue),
+    mutationFn: (rawValue: string) => api.charging.validateQr(parseChargeQr(rawValue)),
     onSuccess: (validated) => {
       setValidatedConnector(validated);
       router.replace('/(tabs)/charge/preparing');

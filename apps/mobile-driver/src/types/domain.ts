@@ -156,6 +156,28 @@ export interface UserProfile {
   estimatedSavings: number;
 }
 
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface RegisterInput {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+}
+
+export interface AuthSession {
+  user: UserProfile;
+  tokens: AuthTokens;
+}
 export interface ChargingHistoryItem {
   id: string;
   stationName: string;

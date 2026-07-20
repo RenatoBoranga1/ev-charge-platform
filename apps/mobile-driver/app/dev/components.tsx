@@ -1,3 +1,4 @@
+import { Redirect } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
@@ -6,6 +7,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { AppTextField } from '@/components/AppTextField';
 import { ChargingMetricCard } from '@/components/ChargingMetricCard';
 import { ConnectorBadge } from '@/components/ConnectorBadge';
+import { isDevelopmentCatalogEnabled } from '@/config/runtime';
 import { EmptyState, ErrorState, LoadingState } from '@/components/AsyncState';
 import { FilterChip } from '@/components/FilterChip';
 import { PaymentMethodCard } from '@/components/PaymentMethodCard';
@@ -17,6 +19,8 @@ import { useAppTheme } from '@/theme/ThemeProvider';
 
 export default function ComponentsCatalogScreen() {
   const { colors } = useAppTheme();
+
+  if (!isDevelopmentCatalogEnabled()) return <Redirect href="/" />;
 
   return (
     <Screen>

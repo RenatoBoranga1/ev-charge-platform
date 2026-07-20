@@ -1,9 +1,10 @@
 import type { ApiClients } from './contracts';
 import { createMockApiClients } from './mock-api';
 import { createRestApiClients } from './rest-api';
+import { getApiMode } from '@/config/runtime';
 
 function createApiClients(): ApiClients {
-  const mode = process.env.EXPO_PUBLIC_API_MODE ?? 'mock';
+  const mode = getApiMode();
 
   if (mode === 'mock') {
     return createMockApiClients();

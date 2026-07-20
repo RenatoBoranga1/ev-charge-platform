@@ -1,0 +1,432 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  DRIVER
+  OPERATOR
+  ADMIN
+}
+
+enum VehicleType {
+  BEV
+  PHEV
+}
+
+enum StationStatus {
+  AVAILABLE
+  PARTIAL
+  OCCUPIED
+  RESERVED
+  OFFLINE
+  MAINTENANCE
+}
+
+enum ConnectorStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  OFFLINE
+  MAINTENANCE
+}
+
+enum PlugType {
+  CCS2
+  TYPE_2
+  CHADEMO
+  GB_T
+}
+
+enum CurrentType {
+  AC
+  DC
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum ChargingSessionStatus {
+  PREPARING
+  STARTING
+  CHARGING
+  VEHICLE_SUSPENDED
+  CHARGER_SUSPENDED
+  FINISHING
+  COMPLETED
+  FAILED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum OutboxStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
+model Tenant {
+  id           String        @id @default(uuid()) @db.Uuid
+  name         String
+  slug         String        @unique
+  users        User[]
+  operators    Operator[]
+  stations     Station[]
+  auditLogs    AuditLog[]
+  outboxEvents OutboxEvent[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  deletedAt    DateTime?     @map("deleted_at")
+  version      Int           @default(1)
+
+  @@index([deletedAt])
+  @@map("tenants")
+}
+
+model User {
+  id               String               @id @default(uuid()) @db.Uuid
+  tenantId         String               @map("tenant_id") @db.Uuid
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  email            String
+  passwordHash     String               @map("password_hash")
+  role             UserRole             @default(DRIVER)
+  name             String
+  phone            String?
+  totalEnergyKwh   Decimal              @default(0) @map("total_energy_kwh") @db.Decimal(12, 3)
+  avoidedCo2Kg     Decimal              @default(0) @map("avoided_co2_kg") @db.Decimal(12, 3)
+  estimatedSavings Decimal              @default(0) @map("estimated_savings") @db.Decimal(12, 2)
+  refreshTokens    RefreshToken[]
+  vehicles         Vehicle[]
+  reservations     Reservation[]
+  chargingSessions ChargingSession[]
+  payments         PaymentTransaction[]
+  auditLogs        AuditLog[]
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+  deletedAt        DateTime?            @map("deleted_at")
+  version          Int                  @default(1)
+
+  @@unique([tenantId, email])
+  @@index([tenantId, deletedAt])
+  @@map("users")
+}
+
+model RefreshToken {
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash         String        @unique @map("token_hash")
+  familyId          String        @map("family_id") @db.Uuid
+  expiresAt         DateTime      @map("expires_at")
+  revokedAt         DateTime?     @map("revoked_at")
+  replacedByTokenId String?       @unique @map("replaced_by_token_id") @db.Uuid
+  replacedBy        RefreshToken? @relation("RefreshRotation", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
+  replaces          RefreshToken? @relation("RefreshRotation")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  @@index([userId, familyId])
+  @@index([expiresAt, revokedAt])
+  @@map("refresh_tokens")
+}
+
+model Vehicle {
+  id                              String      @id @default(uuid()) @db.Uuid
+  userId                          String      @map("user_id") @db.Uuid
+  user                            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand                           String
+  model                           String
+  trim                            String?
+  year                            Int?
+  licensePlate                    String?     @map("license_plate")
+  vehicleType                     VehicleType @map("vehicle_type")
+  batteryCapacityKwh              Decimal     @map("battery_capacity_kwh") @db.Decimal(8, 2)
+  estimatedRangeKm                Int?        @map("estimated_range_km")
+  averageConsumptionKwhPer100Km   Decimal?    @map("average_consumption_kwh_per_100_km") @db.Decimal(8, 2)
+  supportedPlugTypes              PlugType[]  @map("supported_plug_types")
+  isDefault                       Boolean     @default(false) @map("is_default")
+  chargingSessions                ChargingSession[]
+  createdAt                       DateTime    @default(now()) @map("created_at")
+  updatedAt                       DateTime    @updatedAt @map("updated_at")
+  deletedAt                       DateTime?   @map("deleted_at")
+  version                         Int         @default(1)
+
+  @@index([userId, deletedAt])
+  @@index([userId, isDefault])
+  @@map("vehicles")
+}
+
+model Operator {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name      String
+  code      String
+  stations  Station[]
+  tariffs   Tariff[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  version   Int       @default(1)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, deletedAt])
+  @@map("operators")
+}
+
+model Station {
+  id             String         @id @default(uuid()) @db.Uuid
+  tenantId       String         @map("tenant_id") @db.Uuid
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  operatorId     String         @map("operator_id") @db.Uuid
+  operator       Operator       @relation(fields: [operatorId], references: [id], onDelete: Restrict)
+  name           String
+  address        String
+  city           String
+  state          String
+  country        String         @default("BR")
+  postalCode     String?        @map("postal_code")
+  latitude       Decimal        @db.Decimal(10, 7)
+  longitude      Decimal        @db.Decimal(10, 7)
+  location       Unsupported("geography(Point, 4326)")?
+  status         StationStatus  @default(AVAILABLE)
+  openingHours   String         @default("Aberta 24 horas") @map("opening_hours")
+  isOpen24Hours  Boolean        @default(true) @map("is_open_24_hours")
+  hasParking     Boolean        @default(false) @map("has_parking")
+  rating         Decimal        @default(0) @db.Decimal(3, 2)
+  chargePoints   ChargePoint[]
+  tariffs        Tariff[]
+  reservations   Reservation[]
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  deletedAt      DateTime?      @map("deleted_at")
+  version        Int            @default(1)
+
+  @@index([tenantId, status, deletedAt])
+  @@index([operatorId])
+  @@map("stations")
+}
+
+model ChargePoint {
+  id           String        @id @default(uuid()) @db.Uuid
+  stationId    String        @map("station_id") @db.Uuid
+  station      Station       @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  externalCode String        @map("external_code")
+  name         String?
+  status       StationStatus @default(AVAILABLE)
+  evses        Evse[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  deletedAt    DateTime?     @map("deleted_at")
+  version      Int           @default(1)
+
+  @@unique([stationId, externalCode])
+  @@index([stationId, deletedAt])
+  @@map("charge_points")
+}
+
+model Evse {
+  id            String          @id @default(uuid()) @db.Uuid
+  chargePointId String          @map("charge_point_id") @db.Uuid
+  chargePoint   ChargePoint     @relation(fields: [chargePointId], references: [id], onDelete: Cascade)
+  uid           String
+  status        ConnectorStatus @default(AVAILABLE)
+  connectors    Connector[]
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  deletedAt     DateTime?       @map("deleted_at")
+  version       Int             @default(1)
+
+  @@unique([chargePointId, uid])
+  @@index([chargePointId, deletedAt])
+  @@map("evses")
+}
+
+model Connector {
+  id                 String          @id @default(uuid()) @db.Uuid
+  evseId             String          @map("evse_id") @db.Uuid
+  evse               Evse            @relation(fields: [evseId], references: [id], onDelete: Cascade)
+  code               String          @unique
+  number             Int
+  plugType           PlugType        @map("plug_type")
+  currentType        CurrentType     @map("current_type")
+  maximumPowerKw     Decimal         @map("maximum_power_kw") @db.Decimal(8, 2)
+  status             ConnectorStatus @default(AVAILABLE)
+  externalIdentifier String?         @map("external_identifier")
+  reservations       Reservation[]
+  chargingSessions   ChargingSession[]
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  deletedAt          DateTime?       @map("deleted_at")
+  version            Int             @default(1)
+
+  @@unique([evseId, number])
+  @@index([evseId, status, deletedAt])
+  @@map("connectors")
+}
+
+model Tariff {
+  id             String            @id @default(uuid()) @db.Uuid
+  stationId      String            @map("station_id") @db.Uuid
+  station        Station           @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  operatorId     String            @map("operator_id") @db.Uuid
+  operator       Operator          @relation(fields: [operatorId], references: [id], onDelete: Restrict)
+  name           String
+  currency       String            @default("BRL")
+  pricePerKwh    Decimal           @map("price_per_kwh") @db.Decimal(10, 4)
+  activationFee  Decimal           @default(0) @map("activation_fee") @db.Decimal(10, 2)
+  parkingFeeHour Decimal           @default(0) @map("parking_fee_hour") @db.Decimal(10, 2)
+  validFrom      DateTime          @default(now()) @map("valid_from")
+  validUntil     DateTime?         @map("valid_until")
+  chargingSessions ChargingSession[]
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  deletedAt      DateTime?         @map("deleted_at")
+  version        Int               @default(1)
+
+  @@index([stationId, validFrom, validUntil])
+  @@index([operatorId, deletedAt])
+  @@map("tariffs")
+}
+
+model Reservation {
+  id          String            @id @default(uuid()) @db.Uuid
+  userId      String            @map("user_id") @db.Uuid
+  user        User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  stationId   String            @map("station_id") @db.Uuid
+  station     Station           @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  connectorId String            @map("connector_id") @db.Uuid
+  connector   Connector         @relation(fields: [connectorId], references: [id], onDelete: Restrict)
+  startsAt    DateTime          @map("starts_at")
+  expiresAt   DateTime          @map("expires_at")
+  status      ReservationStatus @default(CONFIRMED)
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  deletedAt   DateTime?         @map("deleted_at")
+  version     Int               @default(1)
+
+  @@index([userId, status, startsAt])
+  @@index([connectorId, startsAt, expiresAt])
+  @@map("reservations")
+}
+
+model ChargingSession {
+  id                 String                @id @default(uuid()) @db.Uuid
+  userId             String                @map("user_id") @db.Uuid
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  vehicleId          String                @map("vehicle_id") @db.Uuid
+  vehicle            Vehicle               @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  connectorId        String                @map("connector_id") @db.Uuid
+  connector          Connector             @relation(fields: [connectorId], references: [id], onDelete: Restrict)
+  tariffId           String                @map("tariff_id") @db.Uuid
+  tariff             Tariff                @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  idempotencyKey     String?               @map("idempotency_key")
+  status             ChargingSessionStatus @default(PREPARING)
+  startedAt          DateTime?             @map("started_at")
+  endedAt            DateTime?             @map("ended_at")
+  energyKwh          Decimal               @default(0) @map("energy_kwh") @db.Decimal(12, 3)
+  currentPowerKw     Decimal               @default(0) @map("current_power_kw") @db.Decimal(8, 2)
+  estimatedCost      Decimal               @default(0) @map("estimated_cost") @db.Decimal(12, 2)
+  meterValues        MeterValue[]
+  paymentTransactions PaymentTransaction[]
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  deletedAt          DateTime?             @map("deleted_at")
+  version            Int                   @default(1)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, status, createdAt])
+  @@index([connectorId, status])
+  @@map("charging_sessions")
+}
+
+model MeterValue {
+  id                String          @id @default(uuid()) @db.Uuid
+  chargingSessionId String          @map("charging_session_id") @db.Uuid
+  chargingSession   ChargingSession @relation(fields: [chargingSessionId], references: [id], onDelete: Cascade)
+  sampledAt         DateTime        @map("sampled_at")
+  energyKwh         Decimal         @map("energy_kwh") @db.Decimal(12, 3)
+  powerKw           Decimal?        @map("power_kw") @db.Decimal(8, 2)
+  batteryPercent    Int?            @map("battery_percent")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  @@unique([chargingSessionId, sampledAt])
+  @@index([chargingSessionId, sampledAt])
+  @@map("meter_values")
+}
+
+model PaymentTransaction {
+  id                String          @id @default(uuid()) @db.Uuid
+  userId            String          @map("user_id") @db.Uuid
+  user              User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  chargingSessionId String?         @map("charging_session_id") @db.Uuid
+  chargingSession   ChargingSession? @relation(fields: [chargingSessionId], references: [id], onDelete: SetNull)
+  idempotencyKey    String          @unique @map("idempotency_key")
+  provider          String
+  providerReference String?         @map("provider_reference")
+  amount            Decimal         @db.Decimal(12, 2)
+  currency          String          @default("BRL")
+  status            PaymentStatus   @default(PENDING)
+  metadata          Json?
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  deletedAt         DateTime?       @map("deleted_at")
+  version           Int             @default(1)
+
+  @@index([userId, status, createdAt])
+  @@index([chargingSessionId])
+  @@map("payment_transactions")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId        String?  @map("user_id") @db.Uuid
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action        String
+  entityType    String   @map("entity_type")
+  entityId      String?  @map("entity_id")
+  correlationId String?  @map("correlation_id")
+  before        Json?
+  after         Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, entityType, entityId, createdAt])
+  @@index([correlationId])
+  @@map("audit_logs")
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String       @map("tenant_id") @db.Uuid
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id")
+  eventType     String       @map("event_type")
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  occurredAt    DateTime     @default(now()) @map("occurred_at")
+  publishedAt   DateTime?    @map("published_at")
+  attempts      Int          @default(0)
+  lastError     String?      @map("last_error")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  @@index([status, occurredAt])
+  @@index([tenantId, aggregateType, aggregateId])
+  @@map("outbox_events")
+}
