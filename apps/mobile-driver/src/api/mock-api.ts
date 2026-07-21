@@ -22,6 +22,7 @@ import type {
   AuthSession,
   AuthTokens,
   ChargingSession,
+  ChargingSessionRealtimeEvent,
   ChargingSummary,
   LoginInput,
   PaymentMethod,
@@ -112,6 +113,7 @@ let vehicleState = [...mockVehicles];
 let paymentState = [...mockPaymentMethods];
 let activeSession: ChargingSession | null = null;
 const processedStartKeys = new Map<string, ChargingSession>();
+const processedStopKeys = new Map<string, ChargingSummary>();
 
 function findConnector(
   predicate: (connectorId: string, code: string) => boolean,
@@ -240,8 +242,29 @@ export class MockChargingApi implements ChargingApi {
     return activeSession;
   }
 
-  async stop(sessionId: string): Promise<ChargingSummary> {
+  async getMetrics(sessionId: string): Promise<ChargingSessionRealtimeEvent> {
+    const session = await this.getById(sessionId);
+    return {
+      currentPowerKw: session.currentPowerKw,
+      elapsedSeconds: session.elapsedSeconds,
+      energyKwh: session.energyKwh,
+      ...(session.estimatedBatteryPercent !== undefined
+        ? { estimatedBatteryPercent: session.estimatedBatteryPercent }
+        : {}),
+      estimatedCost: session.estimatedCost,
+      occurredAt: new Date().toISOString(),
+      sessionId: session.id,
+      status: session.status,
+    };
+  }
+
+  async stop(
+    sessionId: string,
+    idempotencyKey: string,
+  ): Promise<ChargingSummary> {
     await wait(500);
+    const previous = processedStopKeys.get(idempotencyKey);
+    if (previous) return previous;
     if (!activeSession || activeSession.id !== sessionId) {
       throw new Error('Sessão ativa não encontrada.');
     }
@@ -265,6 +288,7 @@ export class MockChargingApi implements ChargingApi {
     };
 
     activeSession = null;
+    processedStopKeys.set(idempotencyKey, summary);
     return summary;
   }
 

@@ -8,14 +8,14 @@ export type StationStatus =
   | 'OFFLINE'
   | 'MAINTENANCE';
 export type ChargingUiStatus =
-  | 'preparing'
+  | 'pending'
+  | 'authorized'
   | 'starting'
   | 'charging'
-  | 'vehicle_suspended'
-  | 'charger_suspended'
-  | 'finishing'
+  | 'stopping'
   | 'completed'
-  | 'failed';
+  | 'failed'
+  | 'cancelled';
 
 export interface Connector {
   id: string;

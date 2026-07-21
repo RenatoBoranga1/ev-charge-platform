@@ -16,6 +16,7 @@ import type {
   AuthTokens,
   ChargingHistoryItem,
   ChargingSession,
+  ChargingSessionRealtimeEvent,
   ChargingSummary,
   LoginInput,
   PaymentMethod,
@@ -211,12 +212,26 @@ class RestChargingApi implements ChargingApi {
     );
   }
 
-  start(input: StartChargingInput): Promise<ChargingSession> {
-    return this.client.request<ChargingSession>('/v1/charging-sessions/start', {
-      method: 'POST',
-      headers: { 'Idempotency-Key': input.idempotencyKey },
-      body: JSON.stringify(input),
-    });
+  async start(input: StartChargingInput): Promise<ChargingSession> {
+    const created = await this.client.request<ChargingSession>(
+      '/v1/charging-sessions',
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': input.idempotencyKey },
+        body: JSON.stringify({
+          connectorId: input.validatedConnector.connector.id,
+          paymentMethodId: input.paymentMethodId,
+          vehicleId: input.vehicleId,
+        }),
+      },
+    );
+    return this.client.request<ChargingSession>(
+      '/v1/charging-sessions/' + created.id + '/start',
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': input.idempotencyKey + ':start' },
+      },
+    );
   }
 
   getActive(): Promise<ChargingSession | null> {
@@ -231,10 +246,19 @@ class RestChargingApi implements ChargingApi {
     );
   }
 
-  stop(sessionId: string): Promise<ChargingSummary> {
+  getMetrics(sessionId: string): Promise<ChargingSessionRealtimeEvent> {
+    return this.client.request<ChargingSessionRealtimeEvent>(
+      `/v1/charging-sessions/${sessionId}/metrics`,
+    );
+  }
+
+  stop(sessionId: string, idempotencyKey: string): Promise<ChargingSummary> {
     return this.client.request<ChargingSummary>(
       `/v1/charging-sessions/${sessionId}/stop`,
-      { method: 'POST' },
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
+      },
     );
   }
 

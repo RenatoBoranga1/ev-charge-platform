@@ -18,6 +18,7 @@
       "outputs": []
     },
     "test": {
+      "env": ["DATABASE_URL", "RUN_DB_TESTS"],
       "outputs": ["coverage/**"]
     }
   }

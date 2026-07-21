@@ -28,7 +28,7 @@ describe('mock charging flow', () => {
     await expect(firstEvent).resolves.toBeGreaterThan(0);
     realtime.disconnect();
 
-    const summary = await api.charging.stop(session.id);
+    const summary = await api.charging.stop(session.id, 'stop-flow');
     expect(summary.session.status).toBe('completed');
     expect(summary.price.totalAmount).toBeGreaterThanOrEqual(0);
   }, 10_000);

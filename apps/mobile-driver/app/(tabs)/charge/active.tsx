@@ -1,19 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { api } from '@/api';
 import { AppButton } from '@/components/AppButton';
 import { AppCard } from '@/components/AppCard';
 import { AppHeader } from '@/components/AppHeader';
-import { EmptyState } from '@/components/AsyncState';
+import { EmptyState, ErrorState, LoadingState } from '@/components/AsyncState';
 import { ChargingMetricCard } from '@/components/ChargingMetricCard';
 import { ChargingProgress } from '@/components/ChargingProgress';
 import { ConfirmationDialog } from '@/components/ConfirmationDialog';
 import { Screen } from '@/components/Screen';
 import { chargingRealtimeClient } from '@/realtime';
+import type { ChargingConnectionState } from '@/realtime/ChargingRealtimeClient';
 import { useChargingStore } from '@/stores/charging-store';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { estimateAvoidedCo2 } from '@/utils/charging';
@@ -25,18 +26,40 @@ export default function ActiveChargeScreen() {
   const activeSessionId = activeSession?.id;
   const applyRealtimeEvent = useChargingStore((state) => state.applyRealtimeEvent);
   const setSummary = useChargingStore((state) => state.setSummary);
+  const setActiveSession = useChargingStore((state) => state.setActiveSession);
   const [confirmStop, setConfirmStop] = useState(false);
+  const [connectionState, setConnectionState] =
+    useState<ChargingConnectionState>('disconnected');
+  const stopIdempotencyKey = useRef(
+    'mobile-stop-' + (activeSessionId ?? 'recovered'),
+  );
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
   const [powerSamples, setPowerSamples] = useState<number[]>([68, 71, 73, 72, 74]);
   const vehicles = useQuery({
     queryKey: ['vehicles'],
     queryFn: () => api.vehicles.list(),
   });
+  const recovery = useQuery({
+    enabled: !activeSession,
+    queryKey: ['charging-session', 'active'],
+    queryFn: () => api.charging.getActive(),
+    retry: 2,
+  });
+  const metrics = useQuery({
+    enabled: Boolean(activeSessionId),
+    queryKey: ['charging-session', activeSessionId, 'metrics'],
+    queryFn: () => api.charging.getMetrics(activeSessionId!),
+    refetchInterval: 5_000,
+    retry: 2,
+  });
   const vehicle = vehicles.data?.find((item) => item.id === activeSession?.vehicleId);
   const stopMutation = useMutation({
     mutationFn: () => {
       if (!activeSession) throw new Error('Sessão ativa não encontrada.');
-      return api.charging.stop(activeSession.id);
+      return api.charging.stop(
+        activeSession.id,
+        stopIdempotencyKey.current,
+      );
     },
     onSuccess: (summary) => {
       chargingRealtimeClient.disconnect();
@@ -47,8 +70,23 @@ export default function ActiveChargeScreen() {
   });
 
   useEffect(() => {
+    if (recovery.data) setActiveSession(recovery.data);
+  }, [recovery.data, setActiveSession]);
+
+  useEffect(() => {
+    if (metrics.data) applyRealtimeEvent(metrics.data);
+  }, [applyRealtimeEvent, metrics.data]);
+
+  useEffect(() => {
     if (!activeSessionId) return undefined;
 
+    const unsubscribeConnection =
+      chargingRealtimeClient.subscribeConnection((state) => {
+        setConnectionState(state);
+        if (state === 'connected') setRealtimeError(null);
+      });
+    const unsubscribeError =
+      chargingRealtimeClient.subscribeError(setRealtimeError);
     const unsubscribe = chargingRealtimeClient.subscribe((event) => {
       applyRealtimeEvent(event);
       setPowerSamples((samples) => [...samples.slice(-11), event.currentPowerKw]);
@@ -63,9 +101,34 @@ export default function ActiveChargeScreen() {
 
     return () => {
       unsubscribe();
+      unsubscribeConnection();
+      unsubscribeError();
       chargingRealtimeClient.disconnect();
     };
   }, [activeSessionId, applyRealtimeEvent]);
+
+  if (!activeSession && recovery.isLoading) {
+    return (
+      <Screen>
+        <AppHeader title="Sessao ativa" />
+        <LoadingState title="Recuperando sessao em andamento" />
+      </Screen>
+    );
+  }
+
+  if (!activeSession && recovery.isError) {
+    return (
+      <Screen>
+        <AppHeader title="Sessao ativa" />
+        <ErrorState
+          title="Nao foi possivel recuperar a sessao"
+          message={recovery.error.message}
+          actionLabel="Tentar novamente"
+          onAction={() => void recovery.refetch()}
+        />
+      </Screen>
+    );
+  }
 
   if (!activeSession) {
     return (
@@ -92,10 +155,28 @@ export default function ActiveChargeScreen() {
           Carregando com segurança
         </Text>
       </View>
+      {connectionState === 'reconnecting' ? (
+        <Text accessibilityLiveRegion="polite" style={[styles.offline, { color: colors.warning }]}>
+          Reconectando atualizacoes em tempo real...
+        </Text>
+      ) : null}
       {realtimeError ? (
         <Text accessibilityRole="alert" style={[styles.offline, { color: colors.warning }]}>
           {realtimeError} Os últimos dados conhecidos continuam visíveis.
         </Text>
+      ) : null}
+      {realtimeError ? (
+        <AppButton
+          label="Tentar reconectar"
+          variant="outline"
+          onPress={() =>
+            void chargingRealtimeClient.reconnect().catch((error: unknown) =>
+              setRealtimeError(
+                error instanceof Error ? error.message : 'Falha na reconexao.',
+              ),
+            )
+          }
+        />
       ) : null}
 
       <ChargingProgress
