@@ -26,6 +26,7 @@ export class WebSocketChargingRealtimeClient implements ChargingRealtimeClient {
   private readonly connectionListeners = new Set<
     (state: ChargingConnectionState) => void
   >();
+  private readonly errorListeners = new Set<(message: string) => void>();
 
   constructor(private readonly baseUrl: string) {}
 
@@ -58,8 +59,8 @@ export class WebSocketChargingRealtimeClient implements ChargingRealtimeClient {
     });
     socket.on('charging:error', ({ message }) => {
       this.setConnectionState('disconnected');
+      this.errorListeners.forEach((listener) => listener(message));
       socket.disconnect();
-      throw new Error(message);
     });
     socket.on('connect', () => {
       this.setConnectionState('connected');
@@ -121,6 +122,11 @@ export class WebSocketChargingRealtimeClient implements ChargingRealtimeClient {
     this.connectionListeners.add(listener);
     listener(this.connectionState);
     return () => this.connectionListeners.delete(listener);
+  }
+
+  subscribeError(listener: (message: string) => void): () => void {
+    this.errorListeners.add(listener);
+    return () => this.errorListeners.delete(listener);
   }
 
   private setConnectionState(state: ChargingConnectionState): void {

@@ -85,6 +85,8 @@ export default function ActiveChargeScreen() {
         setConnectionState(state);
         if (state === 'connected') setRealtimeError(null);
       });
+    const unsubscribeError =
+      chargingRealtimeClient.subscribeError(setRealtimeError);
     const unsubscribe = chargingRealtimeClient.subscribe((event) => {
       applyRealtimeEvent(event);
       setPowerSamples((samples) => [...samples.slice(-11), event.currentPowerKw]);
@@ -100,6 +102,7 @@ export default function ActiveChargeScreen() {
     return () => {
       unsubscribe();
       unsubscribeConnection();
+      unsubscribeError();
       chargingRealtimeClient.disconnect();
     };
   }, [activeSessionId, applyRealtimeEvent]);

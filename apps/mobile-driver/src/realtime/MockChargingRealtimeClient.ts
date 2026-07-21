@@ -13,6 +13,7 @@ export class MockChargingRealtimeClient implements ChargingRealtimeClient {
   private readonly connectionListeners = new Set<
     (state: ChargingConnectionState) => void
   >();
+  private readonly errorListeners = new Set<(message: string) => void>();
   private elapsedSeconds = 0;
   private energyKwh = 0;
 
@@ -73,6 +74,11 @@ export class MockChargingRealtimeClient implements ChargingRealtimeClient {
   ): () => void {
     this.connectionListeners.add(listener);
     return () => this.connectionListeners.delete(listener);
+  }
+
+  subscribeError(listener: (message: string) => void): () => void {
+    this.errorListeners.add(listener);
+    return () => this.errorListeners.delete(listener);
   }
 
   private notifyConnection(state: ChargingConnectionState): void {

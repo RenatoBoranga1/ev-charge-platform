@@ -102,4 +102,17 @@ describe('WebSocketChargingRealtimeClient', () => {
     await client.reconnect();
     expect(socket.connect).toHaveBeenCalledTimes(2);
   });
+
+  it('reports server errors without throwing from the socket callback', async () => {
+    const client = new WebSocketChargingRealtimeClient('https://api.solis.local');
+    const errors = jest.fn();
+    client.subscribeError(errors);
+    await client.connect('session-1');
+
+    expect(() =>
+      handlers.get('charging:error')?.({ message: 'Session not found.' }),
+    ).not.toThrow();
+    expect(errors).toHaveBeenCalledWith('Session not found.');
+    expect(socket.disconnect).toHaveBeenCalled();
+  });
 });

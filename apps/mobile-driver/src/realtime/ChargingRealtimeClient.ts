@@ -16,4 +16,5 @@ export interface ChargingRealtimeClient {
   subscribeConnection(
     listener: (state: ChargingConnectionState) => void,
   ): () => void;
+  subscribeError(listener: (message: string) => void): () => void;
 }
