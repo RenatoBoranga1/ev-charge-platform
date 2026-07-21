@@ -39,11 +39,38 @@ services:
       timeout: 5s
       retries: 10
 
+  charger-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "apps/charger-simulator/dist/index.js"]
+    environment:
+      METER_INTERVAL_MS: 1000
+      PORT: 8100
+      SIMULATOR_SCENARIO: normal
+      SIMULATOR_SECRET: local-simulator-secret
+    ports:
+      - "8100:8100"
+    restart: "on-failure:5"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:8100/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile
     environment:
+      BACKEND_INTERNAL_URL: http://backend:8000
+      CHARGER_SIMULATOR_URL: http://charger-simulator:8100
       CORS_ORIGIN: "*"
       DATABASE_URL: postgresql://solis:solis@postgres:5432/solis?schema=public
       DEFAULT_TENANT_SLUG: solis
@@ -54,6 +81,8 @@ services:
       REDIS_URL: redis://redis:6379
       REFRESH_TOKEN_TTL_DAYS: 30
       SEED_DEMO_DATA: "true"
+      SIMULATOR_SCENARIO: normal
+      SIMULATOR_SECRET: local-simulator-secret
     command:
       - sh
       - -c
@@ -62,6 +91,8 @@ services:
         pnpm --filter @solis/database seed &&
         node apps/backend/dist/main.js
     depends_on:
+      charger-simulator:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:

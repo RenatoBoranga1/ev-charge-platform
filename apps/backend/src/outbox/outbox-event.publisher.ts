@@ -13,8 +13,12 @@ export class OutboxEventPublisher extends DomainEventPublisher {
     super();
   }
 
-  async publish(event: DomainEvent): Promise<void> {
-    await this.prisma.outboxEvent.create({
+  async publish(
+    event: DomainEvent,
+    transaction?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const client = transaction ?? this.prisma;
+    await client.outboxEvent.create({
       data: {
         aggregateId: event.aggregateId,
         aggregateType: event.aggregateType,

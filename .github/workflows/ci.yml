@@ -18,6 +18,36 @@ jobs:
     name: Lint, test and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5
+        env:
+          POSTGRES_DB: solis
+          POSTGRES_PASSWORD: solis
+          POSTGRES_USER: solis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U solis -d solis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7.4.9-alpine3.21
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://solis:solis@localhost:5432/solis?schema=public
+      DEMO_USER_PASSWORD: solis-demo
+      JWT_ACCESS_SECRET: ci-secret-at-least-32-characters-long
+      REDIS_URL: redis://localhost:6379
+      RUN_DB_TESTS: "true"
+      SEED_DEMO_DATA: "true"
 
     steps:
       - name: Checkout repository
@@ -34,6 +64,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Apply database migrations
+        run: pnpm db:migrate
+
+      - name: Seed integration fixtures
+        run: pnpm db:seed
 
       - name: Lint
         run: pnpm lint

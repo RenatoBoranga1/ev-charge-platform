@@ -1,3 +1,5 @@
+import type { Prisma } from '@solis/database';
+
 export interface DomainEvent {
   aggregateId: string;
   aggregateType: string;
@@ -7,5 +9,8 @@ export interface DomainEvent {
 }
 
 export abstract class DomainEventPublisher {
-  abstract publish(event: DomainEvent): Promise<void>;
+  abstract publish(
+    event: DomainEvent,
+    transaction?: Prisma.TransactionClient,
+  ): Promise<void>;
 }

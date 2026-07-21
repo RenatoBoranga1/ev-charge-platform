@@ -67,6 +67,12 @@ O seed de demonstração só é executado quando `SEED_DEMO_DATA=true`. No Compo
 - `GET /v1/stations/nearby`
 - `GET /v1/stations/:id`
 - `POST /v1/charging-sessions/validate-qr`
+- `POST /v1/charging-sessions`
+- `GET /v1/charging-sessions/active`
+- `GET /v1/charging-sessions/:id`
+- `POST /v1/charging-sessions/:id/start`
+- `POST /v1/charging-sessions/:id/stop`
+- `GET /v1/charging-sessions/:id/metrics`
 
 O QR em JSON carrega a hierarquia completa. Deep links carregam somente `connectorId`; o backend resolve connector, EVSE, charge point e estação e rejeita hierarquias divergentes.
 
@@ -89,3 +95,28 @@ A migração habilita PostGIS, mantém latitude/longitude para interoperabilidad
 A cobertura mínima inicial é 80% para statements, 70% para branches, 75% para functions e 80% para lines.
 
 Mais detalhes do cliente estão em `apps/mobile-driver/README.md` e `docs/mobile`.
+## Vertical slice de recarga
+
+O novo workspace `apps/charger-simulator` executa um simulador HTTP sem OCPP, isolado do monolito pelo contrato `ChargerGateway`.
+
+A sessao percorre `PENDING -> AUTHORIZED -> STARTING -> CHARGING -> STOPPING -> COMPLETED`. `FAILED` e `CANCELLED` sao estados terminais alternativos. O backend valida cada transicao, usa `version` para optimistic locking, grava auditoria e Outbox na mesma transacao e exige `Idempotency-Key` em create, start e stop.
+
+O banco possui indice unico parcial para impedir duas sessoes ativas no mesmo conector. Meter values atualizam energia, potencia, duracao, custo e bateria estimada. O snapshot da tarifa preserva o preco contratado mesmo que a tarifa vigente mude.
+
+O realtime usa Socket.IO no namespace `/charging`, com JWT no handshake. O cliente assina `charging:subscribe`, recebe imediatamente o estado atual e depois eventos `charging:metrics`. Em perda de conexao, o mobile reconecta e tambem recupera o snapshot por `GET /metrics`; isso nao ativa fallback para mock.
+
+O simulador registra conectores, aceita start/stop idempotentes, publica MeterValues e suporta os cenarios `normal`, `fail-after-3` e `disconnect-after-3` por `SIMULATOR_SCENARIO`. Para executar o fluxo integrado:
+
+    docker compose up --build -d
+    pnpm e2e:charging
+
+O E2E autentica o usuario seed, lista estacoes e veiculos, cria a sessao, comprova o bloqueio concorrente, repete start/stop com a mesma chave, consulta metricas e valida o resumo final.
+
+## Limitacoes atuais
+
+- Nao ha OCPP nesta etapa; `ChargerGateway` e o ponto de troca futuro.
+- O simulador mantem estado em memoria e reinicia limpo.
+- Socket.IO usa memoria do processo; escala horizontal exigira adapter Redis ou broker.
+- A tarifa calcula energia, ativacao e tempo total como estacionamento simplificado; regras fiscais e meios de pagamento reais ainda nao foram integrados.
+- O identificador de pagamento `account-default` e apenas um contrato temporario.
+- Outbox e persistida, mas a entrega a um broker futuro ainda nao possui worker.

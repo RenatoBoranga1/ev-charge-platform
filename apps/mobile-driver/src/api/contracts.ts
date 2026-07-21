@@ -4,6 +4,7 @@ import type {
   AuthTokens,
   ChargingHistoryItem,
   ChargingSession,
+  ChargingSessionRealtimeEvent,
   ChargingSummary,
   PaymentMethod,
   Reservation,
@@ -48,7 +49,8 @@ export interface ChargingApi {
   start(input: StartChargingInput): Promise<ChargingSession>;
   getActive(): Promise<ChargingSession | null>;
   getById(sessionId: string): Promise<ChargingSession>;
-  stop(sessionId: string): Promise<ChargingSummary>;
+  getMetrics(sessionId: string): Promise<ChargingSessionRealtimeEvent>;
+  stop(sessionId: string, idempotencyKey: string): Promise<ChargingSummary>;
   getHistory(): Promise<ChargingHistoryItem[]>;
 }
 

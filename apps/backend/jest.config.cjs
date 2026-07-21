@@ -10,7 +10,8 @@ module.exports = {
     '^@solis/database$': '<rootDir>/../../packages/database/src/index.ts',
   },
   collectCoverageFrom: [
-    'src/charging/charging.service.ts',
+    'src/charging/domain/*.ts',
+    'src/charging/charging-realtime.gateway.ts',
     'src/auth/jwt-auth.guard.ts',
     'src/common/correlation-id.middleware.ts',
   ],

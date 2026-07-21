@@ -1,4 +1,7 @@
-import type { ChargingRealtimeClient } from './ChargingRealtimeClient';
+import type {
+  ChargingConnectionState,
+  ChargingRealtimeClient,
+} from './ChargingRealtimeClient';
 import type { ChargingSessionRealtimeEvent } from '@/types/domain';
 
 export class MockChargingRealtimeClient implements ChargingRealtimeClient {
@@ -7,12 +10,17 @@ export class MockChargingRealtimeClient implements ChargingRealtimeClient {
   private readonly listeners = new Set<
     (event: ChargingSessionRealtimeEvent) => void
   >();
+  private readonly connectionListeners = new Set<
+    (state: ChargingConnectionState) => void
+  >();
   private elapsedSeconds = 0;
   private energyKwh = 0;
 
   async connect(sessionId: string): Promise<void> {
     this.disconnect();
+    this.notifyConnection('connecting');
     this.sessionId = sessionId;
+    this.notifyConnection('connected');
     this.timer = setInterval(() => {
       if (!this.sessionId) return;
 
@@ -44,6 +52,13 @@ export class MockChargingRealtimeClient implements ChargingRealtimeClient {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.sessionId = null;
+    this.notifyConnection('disconnected');
+  }
+
+  async reconnect(): Promise<void> {
+    const sessionId = this.sessionId;
+    if (!sessionId) throw new Error('Sessao nao selecionada para reconexao.');
+    await this.connect(sessionId);
   }
 
   subscribe(
@@ -51,5 +66,16 @@ export class MockChargingRealtimeClient implements ChargingRealtimeClient {
   ): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  subscribeConnection(
+    listener: (state: ChargingConnectionState) => void,
+  ): () => void {
+    this.connectionListeners.add(listener);
+    return () => this.connectionListeners.delete(listener);
+  }
+
+  private notifyConnection(state: ChargingConnectionState): void {
+    this.connectionListeners.forEach((listener) => listener(state));
   }
 }

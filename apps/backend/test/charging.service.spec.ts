@@ -6,7 +6,14 @@ import { StationsService } from '../src/stations/stations.service';
 describe('ChargingService', () => {
   const validateConnector = jest.fn();
   const stations = { validateConnector } as unknown as StationsService;
-  const service = new ChargingService(stations);
+  const service = new ChargingService(
+    stations,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+  );
 
   beforeEach(() => validateConnector.mockReset());
 
