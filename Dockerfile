@@ -24,6 +24,6 @@ RUN pnpm --filter @solis/database build \
   && pnpm --filter @solis/backend build \
   && pnpm --filter @solis/charger-simulator build
 
-EXPOSE 8000 8100
+EXPOSE 8000 8100 9000
 
 CMD ["node", "apps/backend/dist/main.js"]

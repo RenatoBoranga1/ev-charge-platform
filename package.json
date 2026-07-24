@@ -17,6 +17,7 @@
     "dev:backend": "pnpm --filter @solis/backend dev",
     "dev:simulator": "pnpm --filter @solis/charger-simulator dev",
     "e2e:charging": "node scripts/e2e-charging-flow.mjs",
+    "e2e:ocpp": "node scripts/e2e-ocpp-flow.mjs",
     "db:generate": "pnpm --filter @solis/database prisma:generate",
     "db:migrate": "pnpm --filter @solis/database migrate:deploy",
     "db:seed": "pnpm --filter @solis/database seed",
@@ -25,6 +26,7 @@
   "devDependencies": {
     "prettier": "^3.6.2",
     "turbo": "^2.8.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "ws": "^8.21.1"
   }
 }
