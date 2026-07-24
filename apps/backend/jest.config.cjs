@@ -14,6 +14,10 @@ module.exports = {
     'src/charging/charging-realtime.gateway.ts',
     'src/auth/jwt-auth.guard.ts',
     'src/common/correlation-id.middleware.ts',
+    'src/charging/gateway/charger-event-relay.ts',
+    'src/charging/gateway/ocpp16-charger.gateway.ts',
+    'src/charging/gateway/routing-charger.gateway.ts',
+    'src/ocpp/*.ts',
   ],
   coverageDirectory: 'coverage',
   coverageThreshold: {
