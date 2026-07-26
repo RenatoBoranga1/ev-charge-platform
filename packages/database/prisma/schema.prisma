@@ -80,6 +80,29 @@ enum OutboxStatus {
   FAILED
 }
 
+enum ChargerProtocol {
+  SIMULATOR
+  OCPP16
+}
+
+enum ChargePointConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+}
+
+enum OcppTransactionStatus {
+  REMOTE_START_PENDING
+  ACTIVE
+  STOPPING
+  COMPLETED
+  FAILED
+}
+
+enum OcppMessageDirection {
+  CHARGE_POINT_TO_CSMS
+  CSMS_TO_CHARGE_POINT
+}
+
 model Tenant {
   id           String        @id @default(uuid()) @db.Uuid
   name         String
@@ -223,18 +246,26 @@ model Station {
 }
 
 model ChargePoint {
-  id           String        @id @default(uuid()) @db.Uuid
-  stationId    String        @map("station_id") @db.Uuid
-  station      Station       @relation(fields: [stationId], references: [id], onDelete: Cascade)
-  externalCode String        @map("external_code")
-  name         String?
-  status       StationStatus @default(AVAILABLE)
-  evses        Evse[]
-  chargingSessions ChargingSession[]
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  deletedAt    DateTime?     @map("deleted_at")
-  version      Int           @default(1)
+  id                 String                      @id @default(uuid()) @db.Uuid
+  stationId          String                      @map("station_id") @db.Uuid
+  station            Station                     @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  externalCode       String                      @map("external_code")
+  name               String?
+  status             StationStatus               @default(AVAILABLE)
+  protocol           ChargerProtocol              @default(SIMULATOR)
+  ocppIdentity       String?                      @unique @map("ocpp_identity")
+  ocppEnabled        Boolean                      @default(false) @map("ocpp_enabled")
+  ocppAuthSecretHash String?                      @map("ocpp_auth_secret_hash")
+  connectionStatus   ChargePointConnectionStatus @default(DISCONNECTED) @map("connection_status")
+  lastSeenAt         DateTime?                    @map("last_seen_at")
+  evses              Evse[]
+  chargingSessions   ChargingSession[]
+  ocppTransactions   OcppTransaction[]
+  ocppMessages       OcppMessage[]
+  createdAt          DateTime                     @default(now()) @map("created_at")
+  updatedAt          DateTime                     @updatedAt @map("updated_at")
+  deletedAt          DateTime?                    @map("deleted_at")
+  version            Int                          @default(1)
 
   @@unique([stationId, externalCode])
   @@index([stationId, deletedAt])
@@ -272,6 +303,7 @@ model Connector {
   externalIdentifier String?         @map("external_identifier")
   reservations       Reservation[]
   chargingSessions   ChargingSession[]
+  ocppTransactions   OcppTransaction[]
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
   deletedAt          DateTime?       @map("deleted_at")
@@ -357,6 +389,7 @@ model ChargingSession {
   estimatedCost      Decimal               @default(0) @map("estimated_cost") @db.Decimal(12, 2)
   totalAmount        Decimal               @default(0) @map("total_amount") @db.Decimal(12, 2)
   meterValues        MeterValue[]
+  ocppTransaction    OcppTransaction?
   paymentTransactions PaymentTransaction[]
   createdAt          DateTime              @default(now()) @map("created_at")
   updatedAt          DateTime              @updatedAt @map("updated_at")
@@ -369,6 +402,49 @@ model ChargingSession {
   @@index([stationId, status, createdAt])
   @@index([vehicleId, createdAt])
   @@map("charging_sessions")
+}
+
+model OcppTransaction {
+  id                     String                @id @default(uuid()) @db.Uuid
+  chargePointId          String                @map("charge_point_id") @db.Uuid
+  chargePoint            ChargePoint           @relation(fields: [chargePointId], references: [id], onDelete: Restrict)
+  connectorId            String                @map("connector_id") @db.Uuid
+  connector              Connector             @relation(fields: [connectorId], references: [id], onDelete: Restrict)
+  chargingSessionId      String                @unique @map("charging_session_id") @db.Uuid
+  chargingSession        ChargingSession       @relation(fields: [chargingSessionId], references: [id], onDelete: Restrict)
+  protocolTransactionId  Int                   @unique @default(autoincrement()) @map("protocol_transaction_id")
+  authorizationTokenHash String                @map("authorization_token_hash")
+  status                 OcppTransactionStatus @default(REMOTE_START_PENDING)
+  meterStartWh           BigInt?               @map("meter_start_wh")
+  lastMeterWh            BigInt?               @map("last_meter_wh")
+  meterStopWh            BigInt?               @map("meter_stop_wh")
+  startedAt              DateTime?             @map("started_at")
+  stoppedAt              DateTime?             @map("stopped_at")
+  failureReason          String?               @map("failure_reason")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
+  version                Int                   @default(1)
+
+  @@index([chargePointId, status])
+  @@index([connectorId, status])
+  @@index([authorizationTokenHash, status])
+  @@map("ocpp_transactions")
+}
+
+model OcppMessage {
+  id            String               @id @default(uuid()) @db.Uuid
+  chargePointId String               @map("charge_point_id") @db.Uuid
+  chargePoint   ChargePoint          @relation(fields: [chargePointId], references: [id], onDelete: Cascade)
+  direction     OcppMessageDirection
+  uniqueId      String               @map("unique_id")
+  action        String
+  response      Json?
+  correlationId String               @map("correlation_id")
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  @@unique([chargePointId, direction, uniqueId])
+  @@index([chargePointId, createdAt])
+  @@map("ocpp_messages")
 }
 
 model MeterValue {

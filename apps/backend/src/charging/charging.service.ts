@@ -4,6 +4,8 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  type OnModuleDestroy,
+  type OnModuleInit,
 } from '@nestjs/common';
 import {
   ChargingSessionStatus,
@@ -35,7 +37,10 @@ import {
   calculateChargingPrice,
   type TariffSnapshot,
 } from './domain/tariff-calculator';
-import type { ChargerEventDto } from './dto/charger-event.dto';
+import {
+  type ChargerEvent,
+  ChargerEventRelay,
+} from './gateway/charger-event-relay';
 import type { CreateChargingSessionDto } from './dto/create-charging-session.dto';
 import type { ValidateQrDto } from './dto/validate-qr.dto';
 import { ChargerGateway } from './gateway/charger-gateway';
@@ -49,7 +54,8 @@ const activeStatuses: ChargingSessionStatus[] = [
 ];
 
 @Injectable()
-export class ChargingService {
+export class ChargingService implements OnModuleInit, OnModuleDestroy {
+  private unsubscribeChargerEvents?: () => void;
   constructor(
     private readonly stations: StationsService,
     private readonly prisma: PrismaService,
@@ -57,7 +63,18 @@ export class ChargingService {
     private readonly outbox: DomainEventPublisher,
     private readonly chargerGateway: ChargerGateway,
     private readonly realtime: ChargingRealtimeGateway,
+    private readonly chargerEvents: ChargerEventRelay,
   ) {}
+
+  onModuleInit(): void {
+    this.unsubscribeChargerEvents = this.chargerEvents.subscribe(
+      (event, correlationId) => this.handleChargerEvent(event, correlationId),
+    );
+  }
+
+  onModuleDestroy(): void {
+    this.unsubscribeChargerEvents?.();
+  }
 
   validateQr(input: ValidateQrDto, tenantId: string) {
     if (!input.connectorId && !input.code) {
@@ -455,7 +472,7 @@ export class ChargingService {
   }
 
   async handleChargerEvent(
-    input: ChargerEventDto,
+    input: ChargerEvent,
     correlationId: string,
   ): Promise<void> {
     const session = await this.prisma.chargingSession.findUnique({
@@ -474,6 +491,49 @@ export class ChargingService {
     if (input.type === 'METER_VALUE') {
       const updated = await this.recordMeterValue(session, input);
       if (updated) this.realtime.publish(toChargingSessionMetrics(updated));
+      return;
+    }
+
+    if (input.type === 'STOPPED') {
+      if (!input.meterWh) throw new BadRequestException('Stop meter is required.');
+      let meterStopWh: bigint;
+      try {
+        meterStopWh = BigInt(input.meterWh);
+      } catch {
+        throw new BadRequestException('Invalid stop meter value.');
+      }
+      if (session.status === ChargingSessionStatus.COMPLETED) return;
+      if (session.status === ChargingSessionStatus.CHARGING) {
+        await this.prisma.$transaction((tx) =>
+          this.transition(
+            tx,
+            session,
+            ChargingSessionStatus.STOPPING,
+            user,
+            correlationId,
+          ),
+        );
+      } else if (session.status !== ChargingSessionStatus.STOPPING) {
+        throw new ConflictException('The session cannot accept StopTransaction now.');
+      }
+      const completed = await this.completeSession(
+        session.id,
+        user,
+        correlationId,
+        meterStopWh,
+      );
+      this.realtime.publish(toChargingSessionMetrics(completed));
+      return;
+    }
+
+    if (input.type === 'DISCONNECTED' && input.recoverable) {
+      const recoverable = await this.markRecoverableDisconnect(
+        session.id,
+        user,
+        correlationId,
+        input.reason ?? 'Charger disconnected.',
+      );
+      this.realtime.publish(toChargingSessionMetrics(recoverable));
       return;
     }
 
@@ -497,7 +557,7 @@ export class ChargingService {
 
   private async recordMeterValue(
     knownSession: ChargingSessionRecord,
-    input: ChargerEventDto,
+    input: ChargerEvent,
   ): Promise<ChargingSessionRecord | null> {
     if (knownSession.status !== ChargingSessionStatus.CHARGING) return null;
     if (!input.meterWh || input.powerKw === undefined) {
@@ -558,10 +618,21 @@ export class ChargingService {
         },
       });
 
+      if (current.connector.status === ConnectorStatus.OFFLINE) {
+        await tx.connector.update({
+          data: {
+            status: ConnectorStatus.OCCUPIED,
+            version: { increment: 1 },
+          },
+          where: { id: current.connectorId },
+        });
+      }
+
       const update = await tx.chargingSession.updateMany({
         data: {
           currentPowerKw: input.powerKw,
           energyKwh,
+          failureReason: null,
           estimatedCost: price.totalAmount,
           meterStopWh: meterWh,
           totalAmount: price.totalAmount,
@@ -644,6 +715,87 @@ export class ChargingService {
         where: { id: current.userId },
       });
       return completed;
+    });
+  }
+
+  private async markRecoverableDisconnect(
+    sessionId: string,
+    user: AuthUser,
+    correlationId: string,
+    reason: string,
+  ): Promise<ChargingSessionRecord> {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.chargingSession.findUnique({
+        include: chargingSessionInclude,
+        where: { id: sessionId },
+      });
+      if (!current) throw new NotFoundException('Sessao nao encontrada.');
+      if (
+        current.status !== ChargingSessionStatus.CHARGING &&
+        current.status !== ChargingSessionStatus.STOPPING
+      ) {
+        return current;
+      }
+      await tx.connector.update({
+        data: {
+          status: ConnectorStatus.OFFLINE,
+          version: { increment: 1 },
+        },
+        where: { id: current.connectorId },
+      });
+      const updated = await tx.chargingSession.updateMany({
+        data: {
+          currentPowerKw: 0,
+          failureReason: reason.slice(0, 500),
+          version: { increment: 1 },
+        },
+        where: {
+          id: current.id,
+          status: current.status,
+          version: current.version,
+        },
+      });
+      if (updated.count !== 1) {
+        throw new ConflictException({
+          code: 'OPTIMISTIC_LOCK_CONFLICT',
+          message: 'A sessao foi alterada por outra requisicao.',
+        });
+      }
+      const recoverable = await tx.chargingSession.findUniqueOrThrow({
+        include: chargingSessionInclude,
+        where: { id: current.id },
+      });
+      await tx.auditLog.create({
+        data: {
+          action: 'CHARGER_DISCONNECTED_RECOVERABLE',
+          after: {
+            failureReason: recoverable.failureReason,
+            status: recoverable.status,
+            version: recoverable.version,
+          },
+          correlationId,
+          entityId: current.id,
+          entityType: 'ChargingSession',
+          tenantId: user.tenantId,
+          userId: null,
+        },
+      });
+      await this.outbox.publish(
+        {
+          aggregateId: current.id,
+          aggregateType: 'ChargingSession',
+          eventType: 'ChargingSessionChargerDisconnected',
+          payload: {
+            correlationId,
+            recoverable: true,
+            status: recoverable.status,
+            version: recoverable.version,
+          },
+          tenantId: user.tenantId,
+        },
+        tx,
+      );
+      return recoverable;
     });
   }
 

@@ -54,6 +54,7 @@ O container do backend aguarda PostGIS e Redis, aplica as migrações, executa o
 - Mailpit: `http://localhost:8025`
 - PostgreSQL/PostGIS: `localhost:5432`
 - Redis: `localhost:6379`
+- OCPP 1.6J WebSocket: `ws://localhost:9000/ocpp/{chargePointIdentity}` com subprotocolo `ocpp1.6`
 
 O seed de demonstração só é executado quando `SEED_DEMO_DATA=true`. No Compose, ele cria `marina.souza@example.com` com a senha definida em `DEMO_USER_PASSWORD`.
 
@@ -112,9 +113,26 @@ O simulador registra conectores, aceita start/stop idempotentes, publica MeterVa
 
 O E2E autentica o usuario seed, lista estacoes e veiculos, cria a sessao, comprova o bloqueio concorrente, repete start/stop com a mesma chave, consulta metricas e valida o resumo final.
 
+## Adaptador OCPP 1.6J
+
+O modulo `apps/backend/src/ocpp` adiciona um servidor WebSocket OCPP 1.6J ao mesmo monolito, em uma porta separada da API HTTP. `RoutingChargerGateway` consulta o protocolo do charge point e delega para `SimulatorChargerGateway` ou `Ocpp16ChargerGateway`; assim, o dominio de recarga continua dependendo apenas da porta generica `ChargerGateway` e o simulador HTTP permanece disponivel.
+
+O recorte implementa `BootNotification`, `Heartbeat`, `StatusNotification`, `Authorize`, `StartTransaction`, `MeterValues`, `StopTransaction`, `RemoteStartTransaction` e `RemoteStopTransaction`. CALL, CALLRESULT e CALLERROR usam `uniqueId`, timeout e cache persistente de respostas para repeticoes. Identidade, conexao, `lastSeenAt`, transacao OCPP e mensagens correlacionadas sao persistidas; tokens efemeros ficam somente como SHA-256 e a senha Basic do seed como hash Argon2.
+
+O seed registra `SOLIS-OCPP-001` com senha definida por `OCPP_DEMO_PASSWORD`. Para validar o fluxo completo:
+
+    docker compose up --build -d
+    pnpm e2e:ocpp
+
+O E2E OCPP conecta com `ocpp1.6`, executa boot/heartbeat/status, recebe start remoto, autoriza e inicia a transacao, envia medidores, recebe stop remoto e conclui a mesma `ChargingSession`. A decisao e os limites estao em `docs/architecture/ocpp-16-adapter.md`.
+
 ## Limitacoes atuais
 
-- Nao ha OCPP nesta etapa; `ChargerGateway` e o ponto de troca futuro.
+- O adaptador cobre o recorte minimo solicitado de OCPP 1.6J, nao e uma implementacao completa nem certificada pela Open Charge Alliance.
+- TLS/mTLS deve terminar em proxy ou load balancer na producao; o Compose local expoe WebSocket sem TLS.
+- Conexoes e comandos pendentes OCPP residem em memoria de uma instancia. Escala horizontal exigira ownership distribuido e roteamento de comandos por broker ou Redis.
+- Start local autonomo sem `ChargingSession` previamente correlacionada e perfis como Smart Charging, Firmware Management e Diagnostics nao fazem parte deste recorte.
+- Respostas OCPP repetidas sao persistidas, mas ainda nao existe politica automatica de retencao para `ocpp_messages`.
 - O simulador mantem estado em memoria e reinicia limpo.
 - Socket.IO usa memoria do processo; escala horizontal exigira adapter Redis ou broker.
 - A tarifa calcula energia, ativacao e tempo total como estacionamento simplificado; regras fiscais e meios de pagamento reais ainda nao foram integrados.

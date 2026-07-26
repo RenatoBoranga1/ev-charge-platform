@@ -2,6 +2,7 @@ import 'reflect-metadata';
 
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { ApiExceptionFilter } from './common/api-exception.filter';
@@ -9,10 +10,11 @@ import { environment } from './config/environment';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   app.enableCors({
-    origin: environment.corsOrigin === '*' ? true : environment.corsOrigin,
+    origin: environment.corsOrigins,
   });
+  app.useBodyParser('json', { limit: environment.httpPayloadLimit });
   app.useGlobalFilters(new ApiExceptionFilter());
   app.useGlobalPipes(
     new ValidationPipe({

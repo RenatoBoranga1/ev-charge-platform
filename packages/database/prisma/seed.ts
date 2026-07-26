@@ -1,6 +1,7 @@
 import * as argon2 from 'argon2';
 
 import {
+  ChargerProtocol,
   ConnectorStatus,
   CurrentType,
   PlugType,
@@ -34,6 +35,8 @@ interface StationSeed {
   connectorId: string;
   currentType: CurrentType;
   evseId: string;
+  ocppIdentity?: string;
+  protocol?: ChargerProtocol;
   externalCode: string;
   hasParking: boolean;
   id: string;
@@ -113,16 +116,21 @@ const stations: StationSeed[] = [
     longitude: -46.67218,
     maximumPowerKw: 120,
     name: 'Solis Vila Nova',
+    ocppIdentity: 'SOLIS-OCPP-001',
     openingHours: 'Aberta 24 horas',
     plugType: PlugType.CCS2,
     pricePerKwh: 2.05,
+    protocol: ChargerProtocol.OCPP16,
     rating: 4.3,
     state: 'SP',
     status: StationStatus.PARTIAL,
   },
 ];
 
-async function seedStation(input: StationSeed): Promise<void> {
+async function seedStation(
+  input: StationSeed,
+  ocppAuthSecretHash?: string,
+): Promise<void> {
   await prisma.station.upsert({
     where: { id: input.id },
     update: {
@@ -166,10 +174,20 @@ async function seedStation(input: StationSeed): Promise<void> {
 
   await prisma.chargePoint.upsert({
     where: { id: input.chargePointId },
-    update: { status: input.status },
+    update: {
+      ocppAuthSecretHash: input.ocppIdentity ? ocppAuthSecretHash : null,
+      ocppEnabled: input.protocol === ChargerProtocol.OCPP16,
+      ocppIdentity: input.ocppIdentity ?? null,
+      protocol: input.protocol ?? ChargerProtocol.SIMULATOR,
+      status: input.status,
+    },
     create: {
       externalCode: input.externalCode,
       id: input.chargePointId,
+      ocppAuthSecretHash: input.ocppIdentity ? ocppAuthSecretHash : null,
+      ocppEnabled: input.protocol === ChargerProtocol.OCPP16,
+      ocppIdentity: input.ocppIdentity,
+      protocol: input.protocol ?? ChargerProtocol.SIMULATOR,
       stationId: input.id,
       status: input.status,
     },
@@ -299,7 +317,17 @@ async function main(): Promise<void> {
     },
   });
 
-  for (const station of stations) await seedStation(station);
+  const ocppAuthSecretHash = await argon2.hash(
+    process.env.OCPP_DEMO_PASSWORD ?? 'solis-ocpp-demo',
+  );
+  for (const station of stations) {
+    await seedStation(
+      station,
+      station.protocol === ChargerProtocol.OCPP16
+        ? ocppAuthSecretHash
+        : undefined,
+    );
+  }
   console.info('Seed Solis concluído.');
 }
 
