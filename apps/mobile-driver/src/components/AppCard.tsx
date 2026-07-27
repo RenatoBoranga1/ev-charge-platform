@@ -1,12 +1,9 @@
-import type { PropsWithChildren } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { ComponentProps } from 'react';
 
 import { Card } from '@/design-system/Card';
 
-interface AppCardProps extends PropsWithChildren {
-  style?: StyleProp<ViewStyle>;
-}
+type AppCardProps = ComponentProps<typeof Card>;
 
-export function AppCard({ children, style }: AppCardProps) {
-  return <Card style={style}>{children}</Card>;
+export function AppCard(props: AppCardProps) {
+  return <Card {...props} />;
 }

@@ -40,7 +40,11 @@ export function Card({
   ];
 
   if (!onPress) {
-    return <View style={surfaceStyle}>{children}</View>;
+    return (
+      <View accessibilityLabel={accessibilityLabel} style={surfaceStyle}>
+        {children}
+      </View>
+    );
   }
 
   return (
