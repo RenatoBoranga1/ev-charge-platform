@@ -29,8 +29,17 @@ export interface UsersApi {
   getMe(): Promise<UserProfile>;
 }
 
+export interface NearbyStationsOptions {
+  latitude: number;
+  longitude: number;
+  signal?: AbortSignal;
+}
+
 export interface StationsApi {
-  getNearby(filters: StationFilters): Promise<Station[]>;
+  getNearby(
+    filters: StationFilters,
+    options?: NearbyStationsOptions,
+  ): Promise<Station[]>;
   getById(stationId: string): Promise<Station>;
   createReservation(stationId: string, connectorId: string): Promise<Reservation>;
   listReservations(): Promise<Reservation[]>;

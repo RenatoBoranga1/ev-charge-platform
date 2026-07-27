@@ -6,6 +6,16 @@ module.exports = {
     'src/config/runtime.ts',
     'src/auth/token-storage.ts',
     'src/logging/AppLogger.ts',
+    'src/config/maps.ts',
+    'src/location/LocationService.ts',
+    'src/location/useUserLocation.ts',
+    'src/stations/discovery.ts',
+    'src/stations/clustering.ts',
+    'src/navigation/external-maps.ts',
+    'src/hooks/useDebouncedValue.ts',
+    'src/stores/map-store.ts',
+    'src/components/StationMapMarker.tsx',
+    'src/components/StationPreviewCard.tsx',
   ],
   coverageThreshold: {
     global: {

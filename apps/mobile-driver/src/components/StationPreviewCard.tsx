@@ -1,10 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from './AppButton';
 import { AppCard } from './AppCard';
 import { ConnectorBadge } from './ConnectorBadge';
 import { StationStatusBadge } from './StationStatusBadge';
+import {
+  OutlinedButton,
+  PrimaryButton,
+  SecondaryButton,
+} from '@/design-system';
+import { formatDistance } from '@/stations/discovery';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import type { Station } from '@/types/domain';
 import { formatCurrency } from '@/utils/format';
@@ -13,7 +18,8 @@ interface StationPreviewCardProps {
   station: Station;
   onDetails: () => void;
   onRoute: () => void;
-  onReserve: () => void;
+  onReserve?: () => void;
+  onSelect?: () => void;
 }
 
 export function StationPreviewCard({
@@ -21,16 +27,20 @@ export function StationPreviewCard({
   onDetails,
   onRoute,
   onReserve,
+  onSelect,
 }: StationPreviewCardProps) {
-  const { colors } = useAppTheme();
+  const { colors, typeScale } = useAppTheme();
 
   return (
-    <AppCard>
+    <AppCard accessibilityLabel={`Detalhes de ${station.name || 'estação sem nome'}`}>
       <View style={styles.header}>
         <View style={styles.headingCopy}>
-          <Text style={[styles.name, { color: colors.text }]}>{station.name}</Text>
+          <Text style={[typeScale.titleLarge, { color: colors.text }]}>
+            {station.name || 'Estação sem nome'}
+          </Text>
           <Text style={[styles.address, { color: colors.textMuted }]}>
-            {station.distanceKm.toFixed(1)} km · {station.address}
+            {formatDistance(station.distanceKm)}
+            {station.address ? ` · ${station.address}` : ''}
           </Text>
         </View>
         <StationStatusBadge status={station.status} />
@@ -39,37 +49,55 @@ export function StationPreviewCard({
         <View style={styles.summaryItem}>
           <Ionicons name="flash" size={18} color={colors.primary} />
           <Text style={[styles.summaryText, { color: colors.text }]}>
-            {station.availableConnectors}/{station.totalConnectors} livres
+            {station.totalConnectors > 0
+              ? `${station.availableConnectors}/${station.totalConnectors} livres`
+              : 'Conectores não informados'}
           </Text>
         </View>
-        <Text style={[styles.summaryText, { color: colors.text }]}>
-          até {station.maximumPowerKw} kW
-        </Text>
-        <Text style={[styles.summaryText, { color: colors.text }]}>
-          {formatCurrency(station.pricePerKwh)}/kWh
-        </Text>
+        {station.maximumPowerKw > 0 ? (
+          <Text style={[styles.summaryText, { color: colors.text }]}>
+            até {station.maximumPowerKw} kW
+          </Text>
+        ) : null}
+        {station.pricePerKwh > 0 ? (
+          <Text style={[styles.summaryText, { color: colors.text }]}>
+            {formatCurrency(station.pricePerKwh)}/kWh
+          </Text>
+        ) : (
+          <Text style={[styles.summaryText, { color: colors.textMuted }]}>
+            Preço não informado
+          </Text>
+        )}
       </View>
-      <View style={styles.badges}>
-        {station.plugTypes.map((plugType) => (
-          <ConnectorBadge key={plugType} plugType={plugType} />
-        ))}
-      </View>
+      {station.plugTypes.length > 0 ? (
+        <View style={styles.badges}>
+          {station.plugTypes.map((plugType) => (
+            <ConnectorBadge key={plugType} plugType={plugType} />
+          ))}
+        </View>
+      ) : null}
       <Text style={[styles.meta, { color: colors.textMuted }]}>
-        ★ {station.rating.toFixed(1)} · {station.openingHours}
+        {station.operator || 'Operador não informado'}
+        {station.rating > 0 ? ` · ★ ${station.rating.toFixed(1)}` : ''}
+        {station.openingHours ? ` · ${station.openingHours}` : ''}
       </Text>
       <View style={styles.actions}>
         <View style={styles.action}>
-          <AppButton label="Detalhes" onPress={onDetails} variant="outline" />
+          <OutlinedButton label="Detalhes" onPress={onDetails} />
         </View>
         <View style={styles.action}>
-          <AppButton label="Traçar rota" onPress={onRoute} variant="secondary" />
+          <SecondaryButton label="Traçar rota" onPress={onRoute} />
         </View>
       </View>
-      <AppButton
-        disabled={station.availableConnectors === 0}
-        label="Reservar conector"
-        onPress={onReserve}
-      />
+      {onSelect ? (
+        <PrimaryButton label="Selecionar estação" onPress={onSelect} />
+      ) : onReserve ? (
+        <PrimaryButton
+          disabled={station.availableConnectors === 0}
+          label="Reservar conector"
+          onPress={onReserve}
+        />
+      ) : null}
     </AppCard>
   );
 }
@@ -77,7 +105,6 @@ export function StationPreviewCard({
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   headingCopy: { flex: 1 },
-  name: { fontSize: 20, fontWeight: '800' },
   address: { marginTop: 4, fontSize: 13, lineHeight: 18 },
   summary: {
     flexDirection: 'row',

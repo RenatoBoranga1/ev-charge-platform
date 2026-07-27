@@ -2,6 +2,7 @@ import type {
   ApiClients,
   AuthApi,
   ChargingApi,
+  NearbyStationsOptions,
   PaymentsApi,
   RoutePlannerProvider,
   StartChargingInput,
@@ -143,8 +144,15 @@ function findConnector(
 }
 
 export class MockStationsApi implements StationsApi {
-  async getNearby(filters: StationFilters): Promise<Station[]> {
+  async getNearby(
+    filters: StationFilters,
+    options?: NearbyStationsOptions,
+  ): Promise<Station[]> {
+    if (options?.signal?.aborted) {
+      throw new Error('A busca de estações foi cancelada.');
+    }
     await wait();
+    if (options?.signal?.aborted) throw new Error('A busca foi cancelada.');
     return filterStations(mockStations, filters);
   }
 

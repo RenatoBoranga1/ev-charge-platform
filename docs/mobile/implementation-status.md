@@ -3,7 +3,7 @@
 ## Funcional
 
 - Tabs, stacks e deep links.
-- Mapa nativo, localização, busca local, marcadores acessíveis, filtros e cartão selecionado.
+- Mapa nativo configurável, localização sob demanda, clusters, pins semânticos, busca, filtros, ordenação, mapa/lista sincronizados, rota externa e cartão selecionado.
 - Detalhe e reserva mock.
 - Planejador de viagem mock.
 - Aviso persistente, câmera real, QR e código manual.
@@ -16,7 +16,7 @@
 - Dependências compatíveis com Expo SDK 56.
 - TypeScript estrito sem erros.
 - ESLint sem erros ou avisos.
-- 15 testes unitários, de componente e de integração aprovados.
+- 93 testes mobile unitários, de componente e de integração aprovados na Fase 2.
 - Bundle Android de produção gerado pelo Metro.
 
 - Autenticação mock e catálogo de componentes.
@@ -27,4 +27,4 @@ Pagamentos, pré-autorização, captura, estações, reservas, usuário, veícul
 
 ## Próximas integrações
 
-API Gateway autenticado, WebSocket real, push, geocoding, clusterização de marcadores para grandes volumes e módulos backend de reserva/pagamento.
+Push, geocoding/autocomplete, supercluster para volumes muito grandes e integrações reais de reserva/pagamento.
