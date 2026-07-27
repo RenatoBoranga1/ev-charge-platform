@@ -8,21 +8,23 @@ import { EmptyState, LoadingState } from '@/components/AsyncState';
 import { Screen } from '@/components/Screen';
 import { VehicleForm } from '@/components/VehicleForm';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import type { Vehicle } from '@/types/domain';
-
-type VehicleInput = Omit<Vehicle, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
+import type { VehicleCreateInput } from '@/types/domain';
 
 export default function EditVehicleScreen() {
   const { vehicleId } = useLocalSearchParams<{ vehicleId: string }>();
   const { colors } = useAppTheme();
   const queryClient = useQueryClient();
   const query = useQuery({
-    queryKey: ['vehicles'],
-    queryFn: () => api.vehicles.list(),
+    queryKey: ['vehicles', vehicleId],
+    queryFn: () => api.vehicles.getById(vehicleId),
   });
-  const vehicle = query.data?.find((item) => item.id === vehicleId);
+  const vehicle = query.data;
   const mutation = useMutation({
-    mutationFn: (input: VehicleInput) => api.vehicles.update(vehicleId, input),
+    mutationFn: (input: VehicleCreateInput) =>
+      api.vehicles.update(vehicleId, {
+        ...input,
+        recordVersion: vehicle?.recordVersion ?? 0,
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       router.back();

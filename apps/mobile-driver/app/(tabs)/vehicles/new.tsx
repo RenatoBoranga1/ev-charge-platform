@@ -7,15 +7,13 @@ import { AppHeader } from '@/components/AppHeader';
 import { Screen } from '@/components/Screen';
 import { VehicleForm } from '@/components/VehicleForm';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import type { Vehicle } from '@/types/domain';
-
-type VehicleInput = Omit<Vehicle, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
+import type { VehicleCreateInput } from '@/types/domain';
 
 export default function NewVehicleScreen() {
   const { colors } = useAppTheme();
   const queryClient = useQueryClient();
   const mutation = useMutation({
-    mutationFn: (input: VehicleInput) => api.vehicles.create(input),
+    mutationFn: (input: VehicleCreateInput) => api.vehicles.create(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       router.replace('/(tabs)/vehicles');

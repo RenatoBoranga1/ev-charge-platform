@@ -1,154 +1,104 @@
-import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Alert, Text } from 'react-native';
 
+import { api } from '@/api';
 import { AppButton } from '@/components/AppButton';
 import { AppHeader } from '@/components/AppHeader';
+import { ErrorState, LoadingState } from '@/components/AsyncState';
+import { ProfileSettingsForm } from '@/components/ProfileSettingsForm';
 import { Screen } from '@/components/Screen';
-import { Card, Chip, Tag } from '@/design-system';
+import { useFeedback } from '@/design-system';
 import { usePreferencesStore } from '@/stores/preferences-store';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import {
-  type DynamicColorSeed,
-  type ThemeMode,
-} from '@/theme/design-tokens';
+import type { UpdateProfileInput } from '@/types/domain';
 
-const settings = [
-  ['chargingNotifications', 'Notificações de recarga'],
-  ['promotions', 'Novidades e promoções'],
-  ['reservationAlerts', 'Avisos de reservas'],
-  ['favoriteStationAlerts', 'Estação favorita disponível'],
-  ['emailReceipts', 'Recibos por e-mail'],
-  ['dataSaver', 'Modo de economia de dados'],
+const localBooleanKeys = [
+  'chargingNotifications',
+  'promotions',
+  'reservationAlerts',
+  'favoriteStationAlerts',
+  'emailReceipts',
+  'dataSaver',
 ] as const;
 
-const themeModes: { label: string; value: ThemeMode }[] = [
-  { label: 'Sistema', value: 'system' },
-  { label: 'Claro', value: 'light' },
-  { label: 'Escuro', value: 'dark' },
-];
-
-const colorSeeds: { label: string; value: DynamicColorSeed }[] = [
-  { label: 'Solis', value: 'solis' },
-  { label: 'Oceano', value: 'ocean' },
-  { label: 'Solar', value: 'solar' },
-];
-
 export default function SettingsScreen() {
-  const { colors, typeScale } = useAppTheme();
-  const preferences = usePreferencesStore();
-  const setHideReminder = usePreferencesStore(
-    (state) => state.setHideCableReminder,
-  );
+  const { colors } = useAppTheme();
+  const feedback = useFeedback();
+  const queryClient = useQueryClient();
+  const profile = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => api.users.getMe(),
+  });
+  const update = useMutation({
+    mutationFn: (input: UpdateProfileInput) => api.users.update(input),
+    onSuccess: async (updated) => {
+      queryClient.setQueryData(['profile'], updated);
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
+      const preferences = usePreferencesStore.getState();
+      preferences.setThemeMode(updated.theme.toLowerCase() as 'system' | 'light' | 'dark');
+      for (const key of localBooleanKeys) {
+        const nextValue =
+          key === 'dataSaver'
+            ? updated.preferences.dataSaver
+            : updated.notifications[key];
+        if (preferences[key] !== nextValue) preferences.toggle(key);
+      }
+      feedback.showSnackbar('Preferências salvas.');
+    },
+    onError: (error) => feedback.showToast(error.message, { tone: 'danger' }),
+  });
+
+  if (profile.isLoading) {
+    return <Screen><LoadingState title="Carregando preferências" /></Screen>;
+  }
+  if (profile.isError) {
+    return (
+      <Screen>
+        <AppHeader canGoBack title="Preferências e privacidade" />
+        <ErrorState
+          actionLabel="Tentar novamente"
+          message={profile.error.message}
+          onAction={() => void profile.refetch()}
+          title="Não foi possível carregar suas preferências"
+        />
+      </Screen>
+    );
+  }
+  if (!profile.data) return null;
 
   return (
     <Screen>
       <AppHeader canGoBack title="Preferências e privacidade" />
-
-      <Card variant="filled">
-        <View style={styles.sectionTitle}>
-          <Text style={[typeScale.titleMedium, { color: colors.text }]}>
-            Aparência
-          </Text>
-          <Tag label="Material 3" tone="primary" />
-        </View>
-        <Text style={[typeScale.bodyMedium, { color: colors.textMuted }]}>
-          O modo Sistema acompanha automaticamente a configuração do aparelho.
+      <ProfileSettingsForm
+        loading={update.isPending}
+        onSubmit={(input) => update.mutate(input)}
+        profile={profile.data}
+      />
+      {update.error ? (
+        <Text accessibilityRole="alert" style={{ color: colors.danger }}>
+          {update.error.message}
         </Text>
-        <View style={styles.choices}>
-          {themeModes.map((item) => (
-            <Chip
-              key={item.value}
-              label={item.label}
-              onPress={() => preferences.setThemeMode(item.value)}
-              selected={preferences.themeMode === item.value}
-            />
-          ))}
-        </View>
-        <Text style={[typeScale.titleSmall, { color: colors.text }]}>
-          Cor dinâmica
-        </Text>
-        <View style={styles.choices}>
-          {colorSeeds.map((item) => (
-            <Chip
-              key={item.value}
-              label={item.label}
-              onPress={() => preferences.setDynamicColorSeed(item.value)}
-              selected={preferences.dynamicColorSeed === item.value}
-            />
-          ))}
-        </View>
-      </Card>
-
-      <Text style={[typeScale.titleMedium, styles.groupTitle, { color: colors.text }]}>
-        Comunicação e dados
-      </Text>
-      {settings.map(([key, label]) => (
-        <View key={key} style={[styles.row, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
-          <Switch
-            accessibilityLabel={label}
-            value={preferences[key]}
-            onValueChange={() => preferences.toggle(key)}
-            trackColor={{ false: colors.border, true: colors.primary }}
-          />
-        </View>
-      ))}
-      <View style={[styles.row, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.label, { color: colors.text }]}>
-          Ocultar lembrete do cabo
-        </Text>
-        <Switch
-          accessibilityLabel="Ocultar lembrete do cabo"
-          value={preferences.hideCableReminder}
-          onValueChange={setHideReminder}
-          trackColor={{ false: colors.border, true: colors.primary }}
-        />
-      </View>
+      ) : null}
       <AppButton
-        label="Ver política de privacidade"
-        variant="outline"
+        label="Política de privacidade"
         onPress={() =>
           Alert.alert(
             'Privacidade Solis',
-            'Consentimento, finalidade, retenção, portabilidade e exclusão serão publicados antes da produção.',
+            'Finalidade, retenção, portabilidade e exclusão serão publicadas antes da produção.',
           )
         }
+        variant="outline"
       />
       <AppButton
-        label="Ver termos de uso"
-        variant="outline"
+        label="Termos de uso"
         onPress={() =>
           Alert.alert(
-            'Termos mock',
+            'Termos de uso',
             'Conteúdo jurídico pendente de revisão especializada.',
           )
         }
+        variant="outline"
       />
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  sectionTitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  choices: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginVertical: 12,
-  },
-  groupTitle: {
-    marginTop: 12,
-  },
-  row: {
-    minHeight: 62,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  label: { flex: 1, fontSize: 15, fontWeight: '600' },
-});

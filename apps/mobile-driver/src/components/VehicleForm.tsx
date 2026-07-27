@@ -8,23 +8,40 @@ import { AppButton } from './AppButton';
 import { AppTextField } from './AppTextField';
 import { FilterChip } from './FilterChip';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import type { PlugType, Vehicle } from '@/types/domain';
+import type { PlugType, Vehicle, VehicleCreateInput } from '@/types/domain';
 
 const vehicleSchema = z.object({
   brand: z.string().min(2, 'Informe o fabricante.'),
+  nickname: z.string().min(2, 'Informe um apelido.').max(60),
   model: z.string().min(1, 'Informe o modelo.'),
   version: z.string(),
   year: z.number().int().min(1990).max(2100),
-  vehicleType: z.enum(['BEV', 'PHEV']),
+  vehicleType: z.enum(['BEV', 'PHEV', 'HEV']),
   batteryCapacityKwh: z.number().positive().max(250),
   estimatedRangeKm: z.number().positive().max(1500),
   licensePlate: z.string().max(10),
-  supportedPlugTypes: z.array(z.enum(['CCS2', 'TYPE_2', 'CHADEMO', 'GB_T'])).min(1),
+  averageConsumptionKwhPer100Km: z.number().positive().max(200),
+  maximumAcPowerKw: z.number().positive().max(100),
+  maximumDcPowerKw: z.number().positive().max(1000),
+  color: z.string().max(40),
+  vin: z.string().refine((value) => value === '' || /^[A-HJ-NPR-Z0-9]{17}$/i.test(value), 'Informe um VIN válido com 17 caracteres.'),
+  imageUrl: z.string().refine((value) => value === '' || /^https?:\/\//i.test(value), 'Informe uma URL válida.'),
+  supportedPlugTypes: z.array(z.enum(['CCS2', 'TYPE_2', 'CHADEMO', 'NACS', 'GB_T'])),
   isDefault: z.boolean(),
+  notes: z.string().max(1000),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'SOLD']),
+}).superRefine((value, context) => {
+  if (value.vehicleType !== 'HEV' && value.supportedPlugTypes.length === 0) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Selecione ao menos um conector.',
+      path: ['supportedPlugTypes'],
+    });
+  }
 });
 
 type VehicleFormValues = z.infer<typeof vehicleSchema>;
-type VehicleInput = Omit<Vehicle, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
+type VehicleInput = VehicleCreateInput;
 
 interface VehicleFormProps {
   initial?: Vehicle;
@@ -56,25 +73,35 @@ export function VehicleForm({
   } = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
     defaultValues: {
+      nickname: initial?.nickname ?? '',
       brand: initial?.brand ?? '',
       model: initial?.model ?? '',
       version: initial?.version ?? '',
+      color: initial?.color ?? '',
       year: initial?.year ?? 2026,
       vehicleType: initial?.vehicleType ?? 'BEV',
       batteryCapacityKwh: initial?.batteryCapacityKwh ?? 60,
       estimatedRangeKm: initial?.estimatedRangeKm ?? 400,
+      averageConsumptionKwhPer100Km: initial?.averageConsumptionKwhPer100Km ?? 17,
+      maximumAcPowerKw: initial?.maximumAcPowerKw ?? 11,
+      maximumDcPowerKw: initial?.maximumDcPowerKw ?? 100,
+      imageUrl: initial?.imageUrl ?? '',
+      vin: initial?.vin ?? '',
       licensePlate: initial?.licensePlate ?? '',
       supportedPlugTypes: initial?.supportedPlugTypes ?? ['CCS2', 'TYPE_2'],
+      notes: initial?.notes ?? '',
+      status: initial?.status ?? 'ACTIVE',
       isDefault: initial?.isDefault ?? false,
     },
   });
 
   const vehicleType = useWatch({ control, name: 'vehicleType' });
   const supportedPlugTypes = useWatch({ control, name: 'supportedPlugTypes' });
+  const status = useWatch({ control, name: 'status' });
   async function next() {
     const fields =
       step === 0
-        ? (['brand', 'model', 'version', 'year'] as const)
+        ? (['nickname', 'brand', 'model', 'version', 'year'] as const)
         : (['vehicleType', 'batteryCapacityKwh', 'estimatedRangeKm'] as const);
     if (await trigger(fields)) setStep((current) => Math.min(2, current + 1));
   }
@@ -89,16 +116,25 @@ export function VehicleForm({
   function submit(values: VehicleFormValues) {
     const input: VehicleInput = {
       brand: values.brand,
+      nickname: values.nickname.trim(),
       model: values.model,
       year: values.year,
+      status: values.status,
       vehicleType: values.vehicleType,
       batteryCapacityKwh: values.batteryCapacityKwh,
       estimatedRangeKm: values.estimatedRangeKm,
+      averageConsumptionKwhPer100Km: values.averageConsumptionKwhPer100Km,
+      maximumAcPowerKw: values.maximumAcPowerKw,
+      maximumDcPowerKw: values.maximumDcPowerKw,
       supportedPlugTypes: values.supportedPlugTypes,
       isDefault: values.isDefault,
     };
     if (values.version.trim()) input.version = values.version.trim();
     if (values.licensePlate.trim()) input.licensePlate = values.licensePlate.trim();
+    if (values.color.trim()) input.color = values.color.trim();
+    if (values.vin.trim()) input.vin = values.vin.trim().toUpperCase();
+    if (values.imageUrl.trim()) input.imageUrl = values.imageUrl.trim();
+    if (values.notes.trim()) input.notes = values.notes.trim();
     onSubmit(input);
   }
 
@@ -125,6 +161,19 @@ export function VehicleForm({
           <Text style={[styles.manual, { color: colors.textMuted }]}>
             Não encontrou? Cadastre seu veículo manualmente.
           </Text>
+          <Controller
+            control={control}
+            name="nickname"
+            render={({ field }) => (
+              <AppTextField
+                label="Apelido"
+                value={field.value}
+                onChangeText={field.onChange}
+                error={errors.nickname?.message}
+                hint="Ex.: Meu carro, Carro da família"
+              />
+            )}
+          />
           <Controller
             control={control}
             name="brand"
@@ -156,7 +205,7 @@ export function VehicleForm({
               <AppTextField
                 label="Versão"
                 value={field.value}
-                onChangeText={(value) => field.onChange(Number(value))}
+                onChangeText={field.onChange}
                 error={errors.version?.message}
               />
             )}
@@ -169,8 +218,34 @@ export function VehicleForm({
                 keyboardType="number-pad"
                 label="Ano"
                 value={String(field.value)}
-                onChangeText={field.onChange}
+                onChangeText={(value) => field.onChange(Number(value))}
                 error={errors.year?.message}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="color"
+            render={({ field }) => (
+              <AppTextField
+                label="Cor opcional"
+                value={field.value}
+                onChangeText={field.onChange}
+                error={errors.color?.message}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="imageUrl"
+            render={({ field }) => (
+              <AppTextField
+                autoCapitalize="none"
+                keyboardType="url"
+                label="URL da foto opcional"
+                value={field.value}
+                onChangeText={field.onChange}
+                error={errors.imageUrl?.message}
               />
             )}
           />
@@ -192,6 +267,11 @@ export function VehicleForm({
               label="Híbrido plug-in"
               selected={vehicleType === 'PHEV'}
               onPress={() => setValue('vehicleType', 'PHEV')}
+            />
+            <FilterChip
+              label="Híbrido"
+              selected={vehicleType === 'HEV'}
+              onPress={() => setValue('vehicleType', 'HEV')}
             />
           </View>
           <Controller
@@ -220,6 +300,45 @@ export function VehicleForm({
               />
             )}
           />
+          <Controller
+            control={control}
+            name="averageConsumptionKwhPer100Km"
+            render={({ field }) => (
+              <AppTextField
+                keyboardType="decimal-pad"
+                label="Consumo médio (kWh/100 km)"
+                value={String(field.value)}
+                onChangeText={(value) => field.onChange(Number(value))}
+                error={errors.averageConsumptionKwhPer100Km?.message}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="maximumAcPowerKw"
+            render={({ field }) => (
+              <AppTextField
+                keyboardType="decimal-pad"
+                label="Potência máxima AC (kW)"
+                value={String(field.value)}
+                onChangeText={(value) => field.onChange(Number(value))}
+                error={errors.maximumAcPowerKw?.message}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="maximumDcPowerKw"
+            render={({ field }) => (
+              <AppTextField
+                keyboardType="decimal-pad"
+                label="Potência máxima DC (kW)"
+                value={String(field.value)}
+                onChangeText={(value) => field.onChange(Number(value))}
+                error={errors.maximumDcPowerKw?.message}
+              />
+            )}
+          />
         </>
       ) : null}
 
@@ -229,7 +348,7 @@ export function VehicleForm({
             Compatibilidade e preferência
           </Text>
           <View style={styles.chips}>
-            {(['CCS2', 'TYPE_2', 'CHADEMO', 'GB_T'] as PlugType[]).map((plug) => {
+            {(['CCS2', 'TYPE_2', 'CHADEMO', 'NACS', 'GB_T'] as PlugType[]).map((plug) => {
               const selected = supportedPlugTypes.includes(plug);
               return (
                 <FilterChip
@@ -267,6 +386,53 @@ export function VehicleForm({
               />
             )}
           />
+          <Controller
+            control={control}
+            name="vin"
+            render={({ field }) => (
+              <AppTextField
+                autoCapitalize="characters"
+                label="VIN opcional"
+                value={field.value}
+                onChangeText={field.onChange}
+                error={errors.vin?.message}
+                hint="17 caracteres, sem I, O ou Q."
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="notes"
+            render={({ field }) => (
+              <AppTextField
+                label="Observações"
+                value={field.value}
+                onChangeText={field.onChange}
+                error={errors.notes?.message}
+                multiline
+              />
+            )}
+          />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Situação do veículo
+          </Text>
+          <View style={styles.chips}>
+            <FilterChip
+              label="Ativo"
+              selected={status === 'ACTIVE'}
+              onPress={() => setValue('status', 'ACTIVE')}
+            />
+            <FilterChip
+              label="Inativo"
+              selected={status === 'INACTIVE'}
+              onPress={() => setValue('status', 'INACTIVE')}
+            />
+            <FilterChip
+              label="Vendido"
+              selected={status === 'SOLD'}
+              onPress={() => setValue('status', 'SOLD')}
+            />
+          </View>
           <Controller
             control={control}
             name="isDefault"

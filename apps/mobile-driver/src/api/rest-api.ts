@@ -28,6 +28,10 @@ import type {
   Station,
   StationFilters,
   UserProfile,
+  UpdateProfileInput,
+  VehicleCreateInput,
+  VehicleListFilters,
+  VehicleUpdateInput,
   ValidatedConnector,
   Vehicle,
 } from '@/types/domain';
@@ -160,6 +164,20 @@ class RestUsersApi implements UsersApi {
   getMe(): Promise<UserProfile> {
     return this.client.request<UserProfile>('/v1/users/me');
   }
+
+  update(input: UpdateProfileInput): Promise<UserProfile> {
+    return this.client.request<UserProfile>('/v1/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
+  }
+
+  requestDeletion(recordVersion: number): Promise<UserProfile> {
+    return this.client.request<UserProfile>('/v1/users/me', {
+      method: 'DELETE',
+      body: JSON.stringify({ recordVersion }),
+    });
+  }
 }
 
 class RestStationsApi implements StationsApi {
@@ -284,25 +302,63 @@ class RestChargingApi implements ChargingApi {
 class RestVehiclesApi implements VehiclesApi {
   constructor(private readonly client: RestClient) {}
 
-  list(): Promise<Vehicle[]> {
-    return this.client.request<Vehicle[]>('/v1/users/me/vehicles');
+  list(filters: VehicleListFilters = {}): Promise<Vehicle[]> {
+    const query = new URLSearchParams();
+    if (filters.search) query.set('search', filters.search);
+    if (filters.type) query.set('type', filters.type);
+    if (filters.status) query.set('status', filters.status);
+    if (filters.sortBy) query.set('sortBy', filters.sortBy);
+    if (filters.sortOrder) query.set('sortOrder', filters.sortOrder);
+    const suffix = query.size > 0 ? `?${query}` : '';
+    return this.client.request<Vehicle[]>(`/v1/users/me/vehicles${suffix}`);
   }
 
-  create(
-    input: Omit<Vehicle, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
-  ): Promise<Vehicle> {
+  getById(vehicleId: string): Promise<Vehicle> {
+    return this.client.request<Vehicle>(`/v1/users/me/vehicles/${vehicleId}`);
+  }
+
+  create(input: VehicleCreateInput): Promise<Vehicle> {
     return this.client.request<Vehicle>('/v1/users/me/vehicles', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   }
 
-  update(vehicleId: string, input: Partial<Vehicle>): Promise<Vehicle> {
+  update(vehicleId: string, input: VehicleUpdateInput): Promise<Vehicle> {
     return this.client.request<Vehicle>(
       `/v1/users/me/vehicles/${vehicleId}`,
       {
         method: 'PATCH',
         body: JSON.stringify(input),
+      },
+    );
+  }
+  setDefault(vehicleId: string, recordVersion: number): Promise<Vehicle> {
+    return this.client.request<Vehicle>(
+      `/v1/users/me/vehicles/${vehicleId}/default`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ recordVersion }),
+      },
+    );
+  }
+
+  duplicate(vehicleId: string, recordVersion: number): Promise<Vehicle> {
+    return this.client.request<Vehicle>(
+      `/v1/users/me/vehicles/${vehicleId}/duplicate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ recordVersion }),
+      },
+    );
+  }
+
+  async remove(vehicleId: string, recordVersion: number): Promise<void> {
+    await this.client.request<void>(
+      `/v1/users/me/vehicles/${vehicleId}`,
+      {
+        method: 'DELETE',
+        body: JSON.stringify({ recordVersion }),
       },
     );
   }

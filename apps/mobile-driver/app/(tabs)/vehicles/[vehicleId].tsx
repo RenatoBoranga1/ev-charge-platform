@@ -1,28 +1,79 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Text, View } from 'react-native';
 
 import { api } from '@/api';
 import { AppButton } from '@/components/AppButton';
-import { AppCard } from '@/components/AppCard';
 import { AppHeader } from '@/components/AppHeader';
-import { EmptyState, LoadingState } from '@/components/AsyncState';
-import { ConnectorBadge } from '@/components/ConnectorBadge';
+import { EmptyState, ErrorState, LoadingState } from '@/components/AsyncState';
+import { ConfirmationDialog } from '@/components/ConfirmationDialog';
 import { Screen } from '@/components/Screen';
+import { VehicleDetails } from '@/components/VehicleDetails';
+import { useFeedback } from '@/design-system';
 import { useAppTheme } from '@/theme/ThemeProvider';
 
 export default function VehicleDetailsScreen() {
   const { vehicleId } = useLocalSearchParams<{ vehicleId: string }>();
+  const { colors } = useAppTheme();
+  const feedback = useFeedback();
+  const queryClient = useQueryClient();
+  const [deleteVisible, setDeleteVisible] = useState(false);
   const query = useQuery({
-    queryKey: ['vehicles'],
-    queryFn: () => api.vehicles.list(),
+    queryKey: ['vehicles', vehicleId],
+    queryFn: () => api.vehicles.getById(vehicleId),
   });
-  const vehicle = query.data?.find((item) => item.id === vehicleId);
+
+  const setDefault = useMutation({
+    mutationFn: () =>
+      api.vehicles.setDefault(vehicleId, query.data?.recordVersion ?? 0),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      feedback.showSnackbar('Veículo principal atualizado.');
+    },
+    onError: (error) => feedback.showToast(error.message, { tone: 'danger' }),
+  });
+  const duplicate = useMutation({
+    mutationFn: () =>
+      api.vehicles.duplicate(vehicleId, query.data?.recordVersion ?? 0),
+    onSuccess: async (created) => {
+      await queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      feedback.showSnackbar('Veículo duplicado.');
+      router.push({
+        pathname: '/(tabs)/vehicles/[vehicleId]',
+        params: { vehicleId: created.id },
+      });
+    },
+    onError: (error) => feedback.showToast(error.message, { tone: 'danger' }),
+  });
+  const remove = useMutation({
+    mutationFn: () =>
+      api.vehicles.remove(vehicleId, query.data?.recordVersion ?? 0),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      feedback.showSnackbar('Veículo removido da garagem.');
+      router.replace('/(tabs)/vehicles');
+    },
+    onError: (error) => feedback.showToast(error.message, { tone: 'danger' }),
+  });
 
   if (query.isLoading) {
     return <Screen><LoadingState title="Carregando veículo" /></Screen>;
   }
-  if (!vehicle) {
+  if (query.isError) {
+    return (
+      <Screen>
+        <AppHeader canGoBack title="Veículo" />
+        <ErrorState
+          actionLabel="Tentar novamente"
+          message={query.error.message}
+          onAction={() => void query.refetch()}
+          title="Não foi possível carregar o veículo"
+        />
+      </Screen>
+    );
+  }
+  if (!query.data) {
     return (
       <Screen>
         <AppHeader canGoBack title="Veículo" />
@@ -31,63 +82,63 @@ export default function VehicleDetailsScreen() {
     );
   }
 
+  const vehicle = query.data;
   return (
     <Screen>
       <AppHeader
         canGoBack
-        title={vehicle.brand + ' ' + vehicle.model}
-        subtitle={vehicle.isDefault ? 'Veículo principal' : 'Veículo cadastrado'}
+        title={vehicle.nickname}
+        subtitle={`${vehicle.brand} ${vehicle.model}`}
       />
-      <AppCard>
-        <Detail label="Motorização" value={vehicle.vehicleType === 'BEV' ? 'Elétrico' : 'Híbrido plug-in'} />
-        <Detail label="Bateria" value={String(vehicle.batteryCapacityKwh) + ' kWh'} />
-        <Detail label="Autonomia" value={String(vehicle.estimatedRangeKm ?? '—') + ' km'} />
-        <Detail label="Ano" value={String(vehicle.year ?? '—')} />
-        <Detail label="Versão" value={vehicle.version ?? 'Não informada'} />
-        <Detail label="Placa" value={vehicle.licensePlate ?? 'Não informada'} />
-        <View style={styles.plugs}>
-          {vehicle.supportedPlugTypes.map((plug) => (
-            <ConnectorBadge key={plug} plugType={plug} />
-          ))}
-        </View>
-      </AppCard>
-      <AppButton
-        label="Editar veículo"
-        onPress={() =>
-          router.push({
-            pathname: '/(tabs)/vehicles/edit-[vehicleId]',
-            params: { vehicleId },
-          })
+      <VehicleDetails vehicle={vehicle} />
+      <View style={{ gap: 10 }}>
+        <AppButton
+          label="Editar veículo"
+          onPress={() =>
+            router.push({
+              pathname: '/(tabs)/vehicles/edit-[vehicleId]',
+              params: { vehicleId },
+            })
+          }
+        />
+        {!vehicle.isDefault ? (
+          <AppButton
+            label="Definir como principal"
+            loading={setDefault.isPending}
+            onPress={() => setDefault.mutate()}
+            variant="secondary"
+          />
+        ) : null}
+        <AppButton
+          label="Duplicar veículo"
+          loading={duplicate.isPending}
+          onPress={() => duplicate.mutate()}
+          variant="outline"
+        />
+        <AppButton
+          label="Remover veículo"
+          onPress={() => setDeleteVisible(true)}
+          variant="danger"
+        />
+      </View>
+      {(setDefault.error || duplicate.error || remove.error) ? (
+        <Text accessibilityRole="alert" style={{ color: colors.danger }}>
+          {(setDefault.error ?? duplicate.error ?? remove.error)?.message}
+        </Text>
+      ) : null}
+      <ConfirmationDialog
+        confirmLabel="Remover"
+        loading={remove.isPending}
+        message={
+          vehicle.isDefault
+            ? 'Ao remover o principal, outro veículo ativo será promovido automaticamente.'
+            : 'O veículo deixará de aparecer na garagem. O histórico será preservado.'
         }
-      />
-      <AppButton
-        label="Planejar viagem"
-        variant="secondary"
-        onPress={() => router.push('/(tabs)/trips/plan')}
+        onCancel={() => setDeleteVisible(false)}
+        onConfirm={() => remove.mutate()}
+        title="Remover veículo?"
+        visible={deleteVisible}
       />
     </Screen>
   );
 }
-
-function Detail({ label, value }: { label: string; value: string }) {
-  const { colors } = useAppTheme();
-  return (
-    <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <Text style={[styles.label, { color: colors.textMuted }]}>{label}</Text>
-      <Text style={[styles.value, { color: colors.text }]}>{value}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  row: {
-    minHeight: 48,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  label: { flex: 1, fontSize: 14 },
-  value: { flex: 1, textAlign: 'right', fontSize: 14, fontWeight: '700' },
-  plugs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
-});

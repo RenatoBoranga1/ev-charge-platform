@@ -10,6 +10,7 @@ module.exports = {
     'src/location/LocationService.ts',
     'src/location/useUserLocation.ts',
     'src/stations/discovery.ts',
+    'src/garage/vehicle-catalog.ts',
     'src/stations/clustering.ts',
     'src/navigation/external-maps.ts',
     'src/hooks/useDebouncedValue.ts',

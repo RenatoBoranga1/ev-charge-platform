@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 
-import { VehiclesModule } from '../vehicles/vehicles.module';
+import { OutboxModule } from '../outbox/outbox.module';
+import { UserProfileService } from './user-profile.service';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
 @Module({
-  imports: [VehiclesModule],
+  imports: [OutboxModule],
   controllers: [UsersController],
-  providers: [UsersService],
-  exports: [UsersService],
+  providers: [UserProfileService, UsersService],
+  exports: [UserProfileService, UsersService],
 })
 export class UsersModule {}
