@@ -6,35 +6,96 @@ import {
 } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { darkColors, lightColors, radii, spacing, typography } from './tokens';
+import { usePreferencesStore } from '@/stores/preferences-store';
 
-type Theme = {
+import {
+  createThemeColors,
+  elevation,
+  radii,
+  shadows,
+  sizes,
+  spacing,
+  typeScale,
+  typography,
+  type DynamicColorSeed,
+  type ThemeMode,
+} from './design-tokens';
+
+export type Theme = {
   isDark: boolean;
-  colors: typeof lightColors;
+  mode: 'light' | 'dark';
+  preference: ThemeMode;
+  dynamicColorSeed: DynamicColorSeed;
+  colors: ReturnType<typeof createThemeColors>;
   radii: typeof radii;
   spacing: typeof spacing;
   typography: typeof typography;
+  typeScale: typeof typeScale;
+  elevation: typeof elevation;
+  shadows: typeof shadows;
+  sizes: typeof sizes;
+  setThemeMode: (mode: ThemeMode) => void;
+  setDynamicColorSeed: (seed: DynamicColorSeed) => void;
 };
+
+const defaultColors = createThemeColors('light');
+const noop = () => undefined;
 
 const ThemeContext = createContext<Theme>({
   isDark: false,
-  colors: lightColors,
+  mode: 'light',
+  preference: 'system',
+  dynamicColorSeed: 'solis',
+  colors: defaultColors,
   radii,
   spacing,
   typography,
+  typeScale,
+  elevation,
+  shadows,
+  sizes,
+  setThemeMode: noop,
+  setDynamicColorSeed: noop,
 });
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const colorScheme = useColorScheme();
+  const preference = usePreferencesStore((state) => state.themeMode);
+  const dynamicColorSeed = usePreferencesStore((state) => state.dynamicColorSeed);
+  const setThemeMode = usePreferencesStore((state) => state.setThemeMode);
+  const setDynamicColorSeed = usePreferencesStore(
+    (state) => state.setDynamicColorSeed,
+  );
+  const mode =
+    preference === 'system'
+      ? colorScheme === 'dark'
+        ? 'dark'
+        : 'light'
+      : preference;
   const theme = useMemo<Theme>(
     () => ({
-      isDark: colorScheme === 'dark',
-      colors: colorScheme === 'dark' ? darkColors : lightColors,
+      isDark: mode === 'dark',
+      mode,
+      preference,
+      dynamicColorSeed,
+      colors: createThemeColors(mode, dynamicColorSeed),
       radii,
       spacing,
       typography,
+      typeScale,
+      elevation,
+      shadows,
+      sizes,
+      setThemeMode,
+      setDynamicColorSeed,
     }),
-    [colorScheme],
+    [
+      dynamicColorSeed,
+      mode,
+      preference,
+      setDynamicColorSeed,
+      setThemeMode,
+    ],
   );
 
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
