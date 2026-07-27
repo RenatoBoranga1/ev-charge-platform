@@ -20,6 +20,27 @@ Use Node.js 22.13 ou superior.
 
 Não existe fallback silencioso. Em modo api, falhas reais são exibidas.
 
+### Mapas e localização
+
+O mapa preserva `react-native-maps` e usa configuração nativa por ambiente.
+Defina `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_MAP_PROVIDER`, a região padrão e as
+chaves nativas aplicáveis conforme [`docs/mobile/maps-and-location.md`](../../docs/mobile/maps-and-location.md).
+
+As chaves Google são injetadas no build por `app.config.ts`, não usam prefixo
+`EXPO_PUBLIC_` e não são copiadas para o runtime JavaScript. Restrinja cada
+chave por package/bundle, certificado e API no Google Cloud.
+
+A localização:
+
+- só pede permissão após uma ação do usuário;
+- diferencia acesso negado, bloqueado, aproximado e preciso;
+- trata GPS desligado, timeout e cancelamento;
+- remove watches ao sair da tela;
+- mantém busca, filtros, seleção e ordenação sincronizados entre mapa/lista.
+
+Sem localização, a região padrão e a lista continuam disponíveis. Em modo
+`api`, a busca nunca recua silenciosamente para os dados mock.
+
 ## Plataformas
 
 - Android: pressione a no terminal do Expo ou execute pnpm --filter @solis/mobile-driver android.
