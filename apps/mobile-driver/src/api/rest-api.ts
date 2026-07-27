@@ -2,6 +2,7 @@ import type {
   ApiClients,
   AuthApi,
   ChargingApi,
+  NearbyStationsOptions,
   PaymentsApi,
   RoutePlannerProvider,
   StartChargingInput,
@@ -164,13 +165,24 @@ class RestUsersApi implements UsersApi {
 class RestStationsApi implements StationsApi {
   constructor(private readonly client: RestClient) {}
 
-  getNearby(filters: StationFilters): Promise<Station[]> {
+  getNearby(
+    filters: StationFilters,
+    options?: NearbyStationsOptions,
+  ): Promise<Station[]> {
     const query = new URLSearchParams({
       distanceKm: String(filters.maximumDistanceKm),
       minimumPowerKw: String(filters.minimumPowerKw),
       maximumPricePerKwh: String(filters.maximumPricePerKwh),
+      ...(options
+        ? {
+            latitude: String(options.latitude),
+            longitude: String(options.longitude),
+          }
+        : {}),
     });
-    return this.client.request<Station[]>(`/v1/stations/nearby?${query}`);
+    return this.client.request<Station[]>(`/v1/stations/nearby?${query}`, {
+      ...(options?.signal ? { signal: options.signal } : {}),
+    });
   }
 
   getById(stationId: string): Promise<Station> {
