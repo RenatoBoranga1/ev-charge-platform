@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '@/api';
 import { ErrorState, LoadingState } from '@/components/AsyncState';
@@ -78,7 +79,10 @@ export default function StationsScreen() {
   }
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      edges={['top']}
+      style={[styles.screen, { backgroundColor: colors.background }]}
+    >
       <View style={[styles.toolbar, { backgroundColor: colors.surface }]}>
         <View
           style={[
@@ -119,6 +123,7 @@ export default function StationsScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.quickFiltersScroll}
         contentContainerStyle={styles.quickFilters}
       >
         <FilterChip
@@ -211,7 +216,7 @@ export default function StationsScreen() {
           ) : null}
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -252,6 +257,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterCountText: { fontSize: 11, fontWeight: '900' },
+  quickFiltersScroll: { flexGrow: 0, maxHeight: 64 },
   quickFilters: { gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
   mapArea: { flex: 1 },
   locationButton: {
