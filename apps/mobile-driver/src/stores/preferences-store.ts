@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import type { DynamicColorSeed, ThemeMode } from '@/theme/design-tokens';
+
 type ToggleKey =
   | 'chargingNotifications'
   | 'promotions'
@@ -11,6 +13,8 @@ type ToggleKey =
   | 'dataSaver';
 
 interface PreferencesState {
+  themeMode: ThemeMode;
+  dynamicColorSeed: DynamicColorSeed;
   hideCableReminder: boolean;
   chargingNotifications: boolean;
   promotions: boolean;
@@ -18,6 +22,8 @@ interface PreferencesState {
   favoriteStationAlerts: boolean;
   emailReceipts: boolean;
   dataSaver: boolean;
+  setThemeMode: (mode: ThemeMode) => void;
+  setDynamicColorSeed: (seed: DynamicColorSeed) => void;
   setHideCableReminder: (value: boolean) => void;
   toggle: (key: ToggleKey) => void;
 }
@@ -25,6 +31,8 @@ interface PreferencesState {
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
+      themeMode: 'system',
+      dynamicColorSeed: 'solis',
       hideCableReminder: false,
       chargingNotifications: true,
       promotions: false,
@@ -32,6 +40,8 @@ export const usePreferencesStore = create<PreferencesState>()(
       favoriteStationAlerts: true,
       emailReceipts: true,
       dataSaver: false,
+      setThemeMode: (themeMode) => set({ themeMode }),
+      setDynamicColorSeed: (dynamicColorSeed) => set({ dynamicColorSeed }),
       setHideCableReminder: (hideCableReminder) => set({ hideCableReminder }),
       toggle: (key) => set((state) => ({ [key]: !state[key] })),
     }),

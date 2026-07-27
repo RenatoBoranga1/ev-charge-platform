@@ -1,40 +1,12 @@
 import type { PropsWithChildren } from 'react';
-import { StyleSheet, View, type ViewStyle } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
 
-import { useAppTheme } from '@/theme/ThemeProvider';
+import { Card } from '@/design-system/Card';
 
 interface AppCardProps extends PropsWithChildren {
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function AppCard({ children, style }: AppCardProps) {
-  const { colors, radii } = useAppTheme();
-
-  return (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-          borderRadius: radii.lg,
-        },
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
+  return <Card style={style}>{children}</Card>;
 }
-
-const styles = StyleSheet.create({
-  card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    shadowColor: '#000000',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-});
