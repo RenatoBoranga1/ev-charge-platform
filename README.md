@@ -73,6 +73,11 @@ O seed de demonstração só é executado quando `SEED_DEMO_DATA=true`. No Compo
 - `DELETE /v1/users/me/vehicles/:id`
 - `POST /v1/users/me/vehicles/:id/default`
 - `POST /v1/users/me/vehicles/:id/duplicate`
+- `GET /v1/users/me/dashboard`
+- `GET /v1/users/me/charging-sessions`
+- `GET /v1/users/me/charging-sessions/:id`
+- `GET /v1/users/me/charging-sessions/:id/timeline`
+- `GET /v1/users/me/charging-sessions/:id/metrics`
 - `GET /v1/stations/nearby`
 - `GET /v1/stations/:id`
 - `POST /v1/charging-sessions/validate-qr`
@@ -87,6 +92,14 @@ Perfil e garagem usam optimistic locking por `recordVersion`, soft delete,
 auditoria e Outbox. O PostgreSQL garante um único veículo principal ativo por
 usuário. Consulte `docs/architecture/adr-008-profile-and-smart-garage.md` e
 `docs/mobile/profile-and-garage.md`.
+
+Dashboard e histórico usam agregações no backend, paginação por cursor assinado,
+filtros e ordenação no PostgreSQL, timeline segura e métricas com downsampling.
+Valores monetários permanecem `Decimal` e são serializados como string com
+moeda. Economia e CO₂ retornam `null` e ficam ocultos enquanto não houver
+metodologia confiável. Consulte
+`docs/architecture/adr-009-dashboard-and-charging-history.md` e
+`docs/mobile/dashboard-and-charging-history.md`.
 
 O QR em JSON carrega a hierarquia completa. Deep links carregam somente `connectorId`; o backend resolve connector, EVSE, charge point e estação e rejeita hierarquias divergentes.
 
@@ -109,6 +122,7 @@ A migração habilita PostGIS, mantém latitude/longitude para interoperabilidad
 A cobertura mínima inicial é 80% para statements, 70% para branches, 75% para functions e 80% para lines.
 
 Mais detalhes do cliente estão em `apps/mobile-driver/README.md` e `docs/mobile`.
+
 ## Vertical slice de recarga
 
 O novo workspace `apps/charger-simulator` executa um simulador HTTP sem OCPP, isolado do monolito pelo contrato `ChargerGateway`.
