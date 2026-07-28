@@ -64,6 +64,11 @@ describeDatabase('Dashboard and charging history database integration', () => {
     userId?: string;
     vehicleId?: string;
   }) {
+    const terminal = new Set<ChargingSessionStatus>([
+      ChargingSessionStatus.CANCELLED,
+      ChargingSessionStatus.COMPLETED,
+      ChargingSessionStatus.FAILED,
+    ]).has(input.status);
     const startedAt = new Date(now.getTime() - input.ageHours * 60 * 60 * 1000);
     const endedAt = new Date(startedAt.getTime() + 45 * 60 * 1000);
     const session = await prisma.chargingSession.create({
@@ -80,12 +85,13 @@ describeDatabase('Dashboard and charging history database integration', () => {
         startedAt,
         stationId: ids.station,
         status: input.status,
-        stoppedAt: endedAt,
+        stoppedAt: terminal ? endedAt : null,
         tariffId: ids.tariff,
         tariffSnapshot: {
           activationFee: 0,
           currency: 'BRL',
           parkingFeeHour: 0,
+          name: 'Tarifa do snapshot',
           pricePerKwh: 2,
         },
         totalAmount: input.totalAmount,
@@ -354,6 +360,39 @@ describeDatabase('Dashboard and charging history database integration', () => {
     );
   });
 
+  it('uses the tariff snapshot instead of the current tariff relation', async () => {
+    const session = await createSession({
+      ageHours: 4,
+      energyKwh: 5,
+      status: ChargingSessionStatus.COMPLETED,
+      totalAmount: 10,
+    });
+    await prisma.chargingSession.update({
+      data: {
+        tariffSnapshot: {
+          activationFee: 1.25,
+          currency: 'USD',
+          name: 'Snapshot imutável',
+          parkingFeeHour: 0.5,
+          pricePerKwh: 9.99,
+        },
+      },
+      where: { id: session.id },
+    });
+
+    const details = await history.getDetails(session.id, authUser);
+    expect(details).toMatchObject({
+      cost: { amount: '10.00', currency: 'USD' },
+      tariff: {
+        activationFee: '1.25',
+        currency: 'USD',
+        name: 'Snapshot imutável',
+        parkingFeeHour: '0.50',
+        pricePerKwh: '9.9900',
+      },
+    });
+  });
+
   it('returns safe details, timeline and downsampled metrics', async () => {
     const session = await createSession({
       ageHours: 4,
@@ -411,6 +450,10 @@ describeDatabase('Dashboard and charging history database integration', () => {
       maximumPowerKw: 44,
       originalPointCount: 25,
     });
+    expect(metrics.points[0]).toMatchObject({ accumulatedEnergyKwh: 0 });
+    expect(metrics.points.at(-1)).toMatchObject({
+      accumulatedEnergyKwh: 4.8,
+    });
   });
 
   it('represents active and cancelled sessions and hides soft-deleted records', async () => {
@@ -451,6 +494,27 @@ describeDatabase('Dashboard and charging history database integration', () => {
     await expect(history.getDetails(randomUUID(), authUser)).rejects.toThrow(
       'Sessao nao encontrada.',
     );
+    const shortCompleted = await createSession({
+      ageHours: 1,
+      energyKwh: 1,
+      status: ChargingSessionStatus.COMPLETED,
+      totalAmount: 0,
+    });
+    const firstDurationPage = await history.list(
+      authUser,
+      query({ limit: 1, sort: ChargingHistorySort.DURATION_DESC }),
+    );
+    const secondDurationPage = await history.list(
+      authUser,
+      query({
+        cursor: firstDurationPage.pageInfo.endCursor!,
+        limit: 1,
+        sort: ChargingHistorySort.DURATION_DESC,
+      }),
+    );
+    const durationItems = [firstDurationPage.items[0]!, secondDurationPage.items[0]!];
+    expect(durationItems.map((item) => item.id)).toEqual([active.id, shortCompleted.id]);
+    expect(durationItems[0]!.durationSeconds).toBeGreaterThan(durationItems[1]!.durationSeconds);
   });
 
   it('serves concurrent reads without leaking or duplicating sessions', async () => {
@@ -465,7 +529,8 @@ describeDatabase('Dashboard and charging history database integration', () => {
       history.list(authUser, query()),
       history.getDetails(session.id, authUser),
     ]);
-    expect(first).toEqual(second);
+    expect(first.items).toEqual(second.items);
+    expect(first.pageInfo.hasNextPage).toBe(second.pageInfo.hasNextPage);
     expect(first.items.filter((item) => item.id === session.id)).toHaveLength(1);
     expect(details.id).toBe(session.id);
   });

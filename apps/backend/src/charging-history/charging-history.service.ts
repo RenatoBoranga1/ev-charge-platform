@@ -36,10 +36,11 @@ export class ChargingHistoryService {
 
   async list(user: AuthUser, query: ChargingHistoryQueryDto) {
     const period = resolveDateRange(query);
+    const asOf = new Date();
     await this.assertVehicleOwnership(query.vehicleId, user);
-    const page = await this.repository.list(user, query, period);
+    const page = await this.repository.list(user, query, period, asOf);
     return {
-      items: page.items.map(toHistoryItem),
+      items: page.items.map((session) => toHistoryItem(session, page.asOf)),
       pageInfo: {
         endCursor: page.endCursor,
         hasNextPage: page.hasNextPage,

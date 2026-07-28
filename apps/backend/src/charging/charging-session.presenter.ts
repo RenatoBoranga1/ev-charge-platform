@@ -47,6 +47,8 @@ export function readTariffSnapshot(value: Prisma.JsonValue): TariffSnapshot {
     currency:
       typeof source.currency === 'string' ? source.currency : 'BRL',
     initialBatteryPercent: numberField(source, 'initialBatteryPercent', 30),
+    name:
+      typeof source.name === 'string' ? source.name : undefined,
     parkingFeeHour: numberField(source, 'parkingFeeHour', 0),
     pricePerKwh: numberField(source, 'pricePerKwh', 0),
   };

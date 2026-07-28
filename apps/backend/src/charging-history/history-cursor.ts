@@ -5,6 +5,7 @@ import { environment } from '../config/environment';
 import { ChargingHistorySort } from './dto/charging-history-query.dto';
 
 export interface HistoryCursor {
+  asOf: string;
   id: string;
   sort: ChargingHistorySort;
   value: string;
@@ -15,7 +16,7 @@ const UUID_PATTERN =
 
 @Injectable()
 export class HistoryCursorCodec {
-  private readonly secret = environment.jwtAccessSecret;
+  private readonly secret = environment.historyCursorSecret;
 
   encode(value: HistoryCursor): string {
     const payload = Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -39,6 +40,8 @@ export class HistoryCursorCodec {
       ) as Partial<HistoryCursor>;
       if (
         decoded.sort !== expectedSort ||
+        typeof decoded.asOf !== 'string' ||
+        Number.isNaN(new Date(decoded.asOf).getTime()) ||
         typeof decoded.value !== 'string' ||
         typeof decoded.id !== 'string' ||
         !UUID_PATTERN.test(decoded.id)

@@ -7,6 +7,7 @@ interface Environment {
   corsOrigins: string[];
   defaultTenantSlug: string;
   httpPayloadLimit: string;
+  historyCursorSecret: string;
   jwtAccessSecret: string;
   jwtAccessTtl: string;
   nodeEnv: string;
@@ -64,12 +65,30 @@ function configuredCorsOrigins(value: string | undefined): string[] {
   return origins;
 }
 
-function requiredSecret(value: string | undefined): string {
-  const secret = value ?? 'development-only-secret-change-me';
-  if (process.env.NODE_ENV === 'production' && secret.length < 32) {
-    throw new Error('JWT_ACCESS_SECRET must have at least 32 characters.');
+function requiredSecret(
+  value: string | undefined,
+  name: string,
+  fallback: string,
+): string {
+  const secret = value ?? fallback;
+  if ((process.env.NODE_ENV ?? 'development') === 'production' && secret.length < 32) {
+    throw new Error(`${name} must have at least 32 characters.`);
   }
   return secret;
+}
+
+const jwtAccessSecret = requiredSecret(
+  process.env.JWT_ACCESS_SECRET,
+  'JWT_ACCESS_SECRET',
+  'development-jwt-secret-change-me',
+);
+const historyCursorSecret = requiredSecret(
+  process.env.HISTORY_CURSOR_SECRET,
+  'HISTORY_CURSOR_SECRET',
+  'development-history-cursor-secret-change-me',
+);
+if (historyCursorSecret === jwtAccessSecret) {
+  throw new Error('HISTORY_CURSOR_SECRET must differ from JWT_ACCESS_SECRET.');
 }
 
 export const environment: Environment = {
@@ -80,7 +99,8 @@ export const environment: Environment = {
   corsOrigins: configuredCorsOrigins(process.env.CORS_ORIGINS),
   defaultTenantSlug: process.env.DEFAULT_TENANT_SLUG ?? 'solis',
   httpPayloadLimit: process.env.HTTP_PAYLOAD_LIMIT ?? '100kb',
-  jwtAccessSecret: requiredSecret(process.env.JWT_ACCESS_SECRET),
+  historyCursorSecret,
+  jwtAccessSecret,
   jwtAccessTtl: process.env.JWT_ACCESS_TTL ?? '15m',
   nodeEnv: process.env.NODE_ENV ?? 'development',
   ocppAuthMode: oneOf(process.env.OCPP_AUTH_MODE, 'basic', ['basic', 'none']),

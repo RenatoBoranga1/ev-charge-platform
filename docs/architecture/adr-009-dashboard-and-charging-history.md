@@ -41,7 +41,8 @@ O dashboard recebe `from`, `to`, `timezone` e `vehicleId`. A listagem acrescenta
 A listagem usa keyset pagination. O cursor contém o valor da ordenação, o UUID
 da sessão e o sort, codificados em Base64 URL e assinados com HMAC-SHA256. A
 assinatura é comparada em tempo constante. Cursor alterado, malformado ou usado
-com outro sort retorna `INVALID_CURSOR`.
+com outro sort retorna `INVALID_CURSOR`. A assinatura usa
+`HISTORY_CURSOR_SECRET`, obrigatoriamente diferente de `JWT_ACCESS_SECRET`.
 
 A ordenação acontece no PostgreSQL por:
 
@@ -55,8 +56,9 @@ completa.
 
 ## Tempo, energia e potência
 
-A duração usa `startedAt` e, em ordem, `completedAt`, `stoppedAt` ou o fim do
-período consultado para uma sessão ainda aberta. Valores negativos são
+A duração usa `startedAt` e, em ordem, `completedAt`, `stoppedAt` ou um instante
+`asOf` único capturado para toda a paginação quando a sessão ainda está aberta.
+Exibição, ordenação e cursor usam o mesmo instante. Valores negativos são
 limitados a zero. Uma sessão aberta não é apresentada como concluída.
 
 A energia usa o valor consolidado não negativo de `ChargingSession.energyKwh`.
@@ -70,7 +72,8 @@ existentes. Sem amostras confiáveis, ambos os campos são `null`.
 
 O endpoint de métricas executa downsampling no PostgreSQL, com no máximo 120
 pontos por resposta. Retorna energia acumulada, potência e timestamp, além da
-contagem original e retornada. Nenhum frame OCPP bruto é exposto.
+contagem original e retornada. O primeiro e o último `MeterValue` são sempre
+preservados. Nenhum frame OCPP bruto é exposto.
 
 A timeline deriva somente eventos seguros de auditoria da sessão e a primeira
 medição. Ela pode conter criação, autorização, início, parada, conclusão,
@@ -79,8 +82,9 @@ cancelamento e falha. Eventos são ordenados por timestamp.
 ## Valores monetários e estimativas
 
 Valores monetários permanecem `Decimal` no Prisma e são serializados como
-string decimal junto da moeda obtida do snapshot de tarifa. Custo só é exposto
-para sessão concluída, moeda ISO de três letras e valor não negativo.
+string decimal junto da moeda obtida exclusivamente de `tariffSnapshot`; a
+relação com a tarifa atual não participa do read model. Custo só é exposto para
+sessão concluída, moeda ISO de três letras e valor não negativo.
 
 Não existe metodologia aprovada nesta fase para economia ou CO₂ evitado. O
 backend retorna `null` e o mobile omite os cards. Não há cálculo, fatura ou

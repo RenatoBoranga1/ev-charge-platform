@@ -2,6 +2,7 @@ export interface TariffSnapshot {
   activationFee: number;
   currency: string;
   initialBatteryPercent: number;
+  name?: string;
   parkingFeeHour: number;
   pricePerKwh: number;
 }

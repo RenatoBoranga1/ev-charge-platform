@@ -171,6 +171,7 @@ export class ChargingService implements OnModuleInit, OnModuleDestroy {
                 activationFee: Number(tariff.activationFee),
                 currency: tariff.currency,
                 initialBatteryPercent: 30,
+                name: tariff.name,
                 parkingFeeHour: Number(tariff.parkingFeeHour),
                 pricePerKwh: Number(tariff.pricePerKwh),
               };

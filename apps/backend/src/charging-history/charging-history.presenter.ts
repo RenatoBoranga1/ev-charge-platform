@@ -27,15 +27,6 @@ export const historySessionInclude = {
       tenantId: true,
     },
   },
-  tariff: {
-    select: {
-      activationFee: true,
-      currency: true,
-      name: true,
-      parkingFeeHour: true,
-      pricePerKwh: true,
-    },
-  },
   vehicle: {
     select: { brand: true, id: true, model: true, nickname: true },
   },
@@ -49,6 +40,61 @@ export interface SessionPowerSummary {
   averagePowerKw: number | null;
   maximumPowerKw: number | null;
 }
+export interface HistoryTariffSnapshot {
+  activationFee: string;
+  currency: string;
+  name: string;
+  parkingFeeHour: string;
+  pricePerKwh: string;
+}
+
+function decimalSnapshotField(
+  source: Record<string, unknown>,
+  key: string,
+  fractionDigits: number,
+): string | null {
+  const value = source[key];
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  try {
+    const decimal = new Prisma.Decimal(value);
+    return decimal.isFinite() && !decimal.isNegative()
+      ? decimal.toFixed(fractionDigits)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function trustedTariffSnapshot(
+  session: HistorySession,
+): HistoryTariffSnapshot | null {
+  const value = session.tariffSnapshot;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const currency = source.currency;
+  const activationFee = decimalSnapshotField(source, 'activationFee', 2);
+  const parkingFeeHour = decimalSnapshotField(source, 'parkingFeeHour', 2);
+  const pricePerKwh = decimalSnapshotField(source, 'pricePerKwh', 4);
+  if (
+    typeof currency !== 'string' ||
+    !/^[A-Z]{3}$/.test(currency) ||
+    activationFee === null ||
+    parkingFeeHour === null ||
+    pricePerKwh === null
+  ) {
+    return null;
+  }
+  return {
+    activationFee,
+    currency,
+    name:
+      typeof source.name === 'string' && source.name.trim()
+        ? source.name.trim()
+        : 'Tarifa registrada',
+    parkingFeeHour,
+    pricePerKwh,
+  };
+}
 
 function durationSeconds(session: HistorySession, now = new Date()): number {
   if (!session.startedAt) return 0;
@@ -61,17 +107,18 @@ function durationSeconds(session: HistorySession, now = new Date()): number {
 
 function trustedCost(
   session: HistorySession,
+  tariff = trustedTariffSnapshot(session),
 ): { amount: string; currency: string } | null {
   if (
     session.status !== ChargingSessionStatus.COMPLETED ||
-    !/^[A-Z]{3}$/.test(session.tariff.currency) ||
+    !tariff ||
     session.totalAmount.isNegative()
   ) {
     return null;
   }
   return {
     amount: session.totalAmount.toFixed(2),
-    currency: session.tariff.currency,
+    currency: tariff.currency,
   };
 }
 
@@ -92,7 +139,11 @@ function safeEnergyKwh(session: HistorySession): number {
   return 0;
 }
 
-export function toHistoryItem(session: HistorySession) {
+export function toHistoryItem(
+  session: HistorySession,
+  now = new Date(),
+) {
+  const tariff = trustedTariffSnapshot(session);
   return {
     connector: {
       id: session.connector.id,
@@ -101,8 +152,8 @@ export function toHistoryItem(session: HistorySession) {
       )} kW`,
       type: session.connector.plugType.toLowerCase(),
     },
-    cost: trustedCost(session),
-    durationSeconds: durationSeconds(session),
+    cost: trustedCost(session, tariff),
+    durationSeconds: durationSeconds(session, now),
     endedAt:
       (session.completedAt ?? session.stoppedAt)?.toISOString() ?? null,
     energyKwh: safeEnergyKwh(session),
@@ -125,9 +176,12 @@ export function toHistoryItem(session: HistorySession) {
 export function toSessionDetails(
   session: HistorySession,
   power: SessionPowerSummary,
+  now = new Date(),
 ) {
+  const item = toHistoryItem(session, now);
+  const tariff = trustedTariffSnapshot(session);
   return {
-    ...toHistoryItem(session),
+    ...item,
     audit: {
       createdAt: session.createdAt.toISOString(),
       updatedAt: session.updatedAt.toISOString(),
@@ -135,7 +189,7 @@ export function toSessionDetails(
     },
     chargePoint: session.chargePoint,
     connector: {
-      ...toHistoryItem(session).connector,
+      ...item.connector,
       code: session.connector.code,
       number: session.connector.number,
     },
@@ -147,22 +201,13 @@ export function toSessionDetails(
     },
     power,
     station: {
-      ...toHistoryItem(session).station,
+      ...item.station,
       address: session.station.address,
       latitude: Number(session.station.latitude),
       longitude: Number(session.station.longitude),
     },
     stopReason: session.failureReason,
-    tariff:
-      trustedCost(session) !== null
-        ? {
-            activationFee: session.tariff.activationFee.toFixed(2),
-            currency: session.tariff.currency,
-            name: session.tariff.name,
-            parkingFeeHour: session.tariff.parkingFeeHour.toFixed(2),
-            pricePerKwh: session.tariff.pricePerKwh.toFixed(4),
-          }
-        : null,
+    tariff: trustedCost(session, tariff) !== null ? tariff : null,
   };
 }
 

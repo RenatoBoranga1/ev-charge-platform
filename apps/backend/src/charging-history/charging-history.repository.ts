@@ -28,7 +28,7 @@ export interface MeterPointRow {
   sampledAt: Date;
 }
 
-function sortConfiguration(sort: ChargingHistorySort): {
+function sortConfiguration(sort: ChargingHistorySort, asOf: Date): {
   direction: 'ASC' | 'DESC';
   expression: Prisma.Sql;
   kind: 'number' | 'timestamp';
@@ -37,7 +37,7 @@ function sortConfiguration(sort: ChargingHistorySort): {
   const duration = Prisma.sql`GREATEST(
     0,
     EXTRACT(EPOCH FROM (
-      COALESCE(cs.completed_at, cs.stopped_at, cs.started_at, cs.created_at)
+      COALESCE(cs.completed_at, cs.stopped_at, ${asOf})
       - COALESCE(cs.started_at, cs.created_at)
     ))
   )`;
@@ -89,12 +89,18 @@ export class ChargingHistoryRepository {
     user: AuthUser,
     query: ChargingHistoryQueryDto,
     period: ResolvedDateRange,
+    asOf: Date,
   ): Promise<{
+    asOf: Date;
     endCursor: string | null;
     hasNextPage: boolean;
     items: HistorySession[];
   }> {
-    const configuration = sortConfiguration(query.sort);
+    const decoded = query.cursor
+      ? this.cursors.decode(query.cursor, query.sort)
+      : null;
+    const effectiveAsOf = decoded ? new Date(decoded.asOf) : asOf;
+    const configuration = sortConfiguration(query.sort, effectiveAsOf);
     const conditions: Prisma.Sql[] = [
       Prisma.sql`cs.deleted_at IS NULL`,
       Prisma.sql`cs.user_id = ${user.sub}::uuid`,
@@ -142,9 +148,6 @@ export class ChargingHistoryRepository {
       );
     }
 
-    const decoded = query.cursor
-      ? this.cursors.decode(query.cursor, query.sort)
-      : null;
     const cursorCondition = decoded
       ? this.cursorCondition(configuration, decoded)
       : Prisma.empty;
@@ -164,7 +167,7 @@ export class ChargingHistoryRepository {
     const hasNextPage = rows.length > query.limit;
     const pageRows = hasNextPage ? rows.slice(0, query.limit) : rows;
     if (pageRows.length === 0) {
-      return { endCursor: null, hasNextPage: false, items: [] };
+      return { asOf: effectiveAsOf, endCursor: null, hasNextPage: false, items: [] };
     }
 
     const sessions = await this.prisma.chargingSession.findMany({
@@ -178,8 +181,10 @@ export class ChargingHistoryRepository {
     });
     const last = pageRows.at(-1)!;
     return {
+      asOf: effectiveAsOf,
       endCursor: this.cursors.encode({
         id: last.id,
+        asOf: effectiveAsOf.toISOString(),
         sort: query.sort,
         value:
           last.sortValue instanceof Date
@@ -211,25 +216,46 @@ export class ChargingHistoryRepository {
     maxPoints: number,
   ): Promise<MeterPointRow[]> {
     return this.prisma.$queryRaw<MeterPointRow[]>(Prisma.sql`
-      WITH ranked AS (
+      WITH ordered AS (
         SELECT
           sampled_at,
           energy_kwh,
           power_kw,
-          FLOOR(
-            (ROW_NUMBER() OVER (ORDER BY sampled_at) - 1) * ${maxPoints}
-            / GREATEST(COUNT(*) OVER (), 1)
-          ) AS bucket
+          ROW_NUMBER() OVER (ORDER BY sampled_at) AS row_number,
+          COUNT(*) OVER () AS total_count
         FROM meter_values
         WHERE charging_session_id = ${sessionId}::uuid
+      ),
+      bucketed AS (
+        SELECT
+          sampled_at,
+          energy_kwh,
+          power_kw,
+          CASE
+            WHEN total_count <= ${maxPoints} THEN row_number - 1
+            WHEN row_number = 1 THEN 0
+            WHEN row_number = total_count THEN ${maxPoints} - 1
+            ELSE 1 + FLOOR(
+              (row_number - 2) * (${maxPoints} - 2)
+              / GREATEST(total_count - 2, 1)
+            )
+          END AS bucket
+        FROM ordered
+      ),
+      sampled AS (
+        SELECT DISTINCT ON (bucket)
+          sampled_at,
+          energy_kwh,
+          power_kw
+        FROM bucketed
+        ORDER BY bucket, sampled_at
       )
-      SELECT DISTINCT ON (bucket)
+      SELECT
         sampled_at AS "sampledAt",
         energy_kwh AS "energyKwh",
         power_kw AS "powerKw"
-      FROM ranked
-      ORDER BY bucket, sampled_at
-      LIMIT ${maxPoints}
+      FROM sampled
+      ORDER BY sampled_at
     `);
   }
 

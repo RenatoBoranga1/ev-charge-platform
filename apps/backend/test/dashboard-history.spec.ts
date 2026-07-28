@@ -1,8 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
+import { createHmac } from 'node:crypto';
 
 import { resolveDateRange } from '../src/common/date-range';
 import { ChargingHistorySort } from '../src/charging-history/dto/charging-history-query.dto';
 import { HistoryCursorCodec } from '../src/charging-history/history-cursor';
+import { environment } from '../src/config/environment';
 
 describe('Dashboard and history contracts', () => {
   const invalidPeriods: Array<[Parameters<typeof resolveDateRange>[0], string]> = [
@@ -65,11 +67,18 @@ describe('Dashboard and history contracts', () => {
   it('signs cursors and rejects tampering or sort changes', () => {
     const codec = new HistoryCursorCodec();
     const cursor = codec.encode({
+      asOf: '2026-07-28T15:00:00.000Z',
       id: 'b42d2c13-bf73-44c8-8c51-0c2369b8fe0b',
       sort: ChargingHistorySort.RECENT,
       value: '2026-07-20T00:00:00.000Z',
     });
+    const [payload = '', signature] = cursor.split('.');
+    const jwtSignature = createHmac('sha256', environment.jwtAccessSecret)
+      .update(payload)
+      .digest('base64url');
+    expect(signature).not.toBe(jwtSignature);
     expect(codec.decode(cursor, ChargingHistorySort.RECENT)).toMatchObject({
+      asOf: '2026-07-28T15:00:00.000Z',
       sort: ChargingHistorySort.RECENT,
     });
     expect(() => codec.decode(cursor, ChargingHistorySort.OLDEST)).toThrow(BadRequestException);
@@ -81,6 +90,7 @@ describe('Dashboard and history contracts', () => {
   it('rejects malformed cursor payload values', () => {
     const codec = new HistoryCursorCodec();
     const malformed = codec.encode({
+      asOf: '2026-07-28T15:00:00.000Z',
       id: 'b42d2c13-bf73-44c8-8c51-0c2369b8fe0b',
       sort: ChargingHistorySort.ENERGY_ASC,
       value: 'not-a-number',
