@@ -1,11 +1,4 @@
-import type {
-  ChargingHistoryItem,
-  PaymentMethod,
-  Reservation,
-  Station,
-  UserProfile,
-  Vehicle,
-} from '@/types/domain';
+import type { PaymentMethod, Reservation, Station, UserProfile, Vehicle } from '@/types/domain';
 
 export const ids = {
   user: 'b42d2c13-bf73-44c8-8c51-0c2369b8fe0b',
@@ -227,7 +220,18 @@ export const mockProfile: UserProfile = {
   estimatedSavings: 214.8,
 };
 
-export const mockHistory: ChargingHistoryItem[] = [
+export interface MockHistoryItem {
+  durationSeconds: number;
+  energyKwh: number;
+  id: string;
+  paymentLabel: string;
+  startedAt: string;
+  stationName: string;
+  status: 'COMPLETED' | 'FAILED' | 'REFUNDED';
+  totalAmount: number;
+}
+
+export const mockHistory: MockHistoryItem[] = [
   {
     id: 'session-history-001',
     stationName: 'Solis Centro',

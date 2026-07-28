@@ -45,6 +45,7 @@ jobs:
       DATABASE_URL: postgresql://solis:solis@localhost:5432/solis?schema=public
       DEMO_USER_PASSWORD: solis-demo
       JWT_ACCESS_SECRET: ci-secret-at-least-32-characters-long
+      HISTORY_CURSOR_SECRET: ci-history-cursor-secret-at-least-32-characters
       OCPP_DEMO_PASSWORD: solis-ocpp-demo
       REDIS_URL: redis://localhost:6379
       RUN_DB_TESTS: "true"

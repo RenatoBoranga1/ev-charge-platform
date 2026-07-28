@@ -2,7 +2,13 @@ import type { ChargeQrPayload } from '@/utils/qr-parser';
 import type {
   AuthSession,
   AuthTokens,
-  ChargingHistoryItem,
+  ChargingHistoryFilters,
+  ChargingHistoryPage,
+  ChargingSessionDetails,
+  ChargingSessionMetricsData,
+  ChargingSessionTimelineData,
+  DashboardData,
+  DashboardQuery,
   ChargingSession,
   ChargingSessionRealtimeEvent,
   ChargingSummary,
@@ -42,10 +48,7 @@ export interface NearbyStationsOptions {
 }
 
 export interface StationsApi {
-  getNearby(
-    filters: StationFilters,
-    options?: NearbyStationsOptions,
-  ): Promise<Station[]>;
+  getNearby(filters: StationFilters, options?: NearbyStationsOptions): Promise<Station[]>;
   getById(stationId: string): Promise<Station>;
   createReservation(stationId: string, connectorId: string): Promise<Reservation>;
   listReservations(): Promise<Reservation[]>;
@@ -66,7 +69,25 @@ export interface ChargingApi {
   getById(sessionId: string): Promise<ChargingSession>;
   getMetrics(sessionId: string): Promise<ChargingSessionRealtimeEvent>;
   stop(sessionId: string, idempotencyKey: string): Promise<ChargingSummary>;
-  getHistory(): Promise<ChargingHistoryItem[]>;
+}
+
+export interface DashboardApi {
+  get(query?: DashboardQuery, signal?: AbortSignal): Promise<DashboardData>;
+}
+
+export interface ChargingHistoryApi {
+  list(
+    filters: ChargingHistoryFilters,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<ChargingHistoryPage>;
+  getDetails(sessionId: string, signal?: AbortSignal): Promise<ChargingSessionDetails>;
+  getTimeline(sessionId: string, signal?: AbortSignal): Promise<ChargingSessionTimelineData>;
+  getMetrics(
+    sessionId: string,
+    maxPoints?: number,
+    signal?: AbortSignal,
+  ): Promise<ChargingSessionMetricsData>;
 }
 
 export interface VehiclesApi {
@@ -93,6 +114,8 @@ export interface RoutePlannerProvider {
 export interface ApiClients {
   auth: AuthApi;
   users: UsersApi;
+  dashboard: DashboardApi;
+  history: ChargingHistoryApi;
   stations: StationsApi;
   charging: ChargingApi;
   vehicles: VehiclesApi;

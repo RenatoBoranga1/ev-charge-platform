@@ -435,6 +435,11 @@ model ChargingSession {
   @@index([connectorId, status])
   @@index([stationId, status, createdAt])
   @@index([vehicleId, createdAt])
+  @@index([userId, startedAt, id])
+  @@index([userId, status, startedAt, id])
+  @@index([userId, vehicleId, startedAt, id])
+  @@index([userId, stationId, startedAt, id])
+  @@index([userId, connectorId, startedAt, id])
   @@map("charging_sessions")
 }
 

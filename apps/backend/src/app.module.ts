@@ -5,9 +5,11 @@ import {
 } from '@nestjs/common';
 
 import { AuthModule } from './auth/auth.module';
+import { ChargingHistoryModule } from './charging-history/charging-history.module';
 import { ChargingModule } from './charging/charging.module';
 import { CorrelationIdMiddleware } from './common/correlation-id.middleware';
 import { ConnectorsModule } from './connectors/connectors.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { OutboxModule } from './outbox/outbox.module';
@@ -22,6 +24,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
   imports: [
     DatabaseModule,
     RedisModule,
+    DashboardModule,
     OutboxModule,
     AuthModule,
     UsersModule,
@@ -29,6 +32,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     StationsModule,
     ConnectorsModule,
     ReservationsModule,
+    ChargingHistoryModule,
     ChargingModule,
     PaymentsModule,
     HealthModule,

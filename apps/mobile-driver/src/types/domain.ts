@@ -5,12 +5,7 @@ export type ProfileTheme = 'SYSTEM' | 'LIGHT' | 'DARK';
 
 export type CurrentType = 'AC' | 'DC';
 export type StationStatus =
-  | 'AVAILABLE'
-  | 'PARTIAL'
-  | 'OCCUPIED'
-  | 'RESERVED'
-  | 'OFFLINE'
-  | 'MAINTENANCE';
+  'AVAILABLE' | 'PARTIAL' | 'OCCUPIED' | 'RESERVED' | 'OFFLINE' | 'MAINTENANCE';
 export type ChargingUiStatus =
   | 'pending'
   | 'authorized'
@@ -176,6 +171,200 @@ export interface ChargingSessionRealtimeEvent {
   estimatedBatteryPercent?: number;
 }
 
+export interface MoneyValue {
+  amount: string;
+  currency: string;
+}
+
+export interface DashboardPeriod {
+  from: string;
+  timezone: string;
+  to: string;
+}
+
+export interface DashboardQuery {
+  from?: string;
+  timezone?: string;
+  to?: string;
+  vehicleId?: string;
+}
+
+export interface DashboardData {
+  driver: {
+    firstName: string;
+    name: string;
+  };
+  period: DashboardPeriod;
+  summary: {
+    totalSessions: number;
+    completedSessions: number;
+    failedSessions: number;
+    cancelledSessions: number;
+    totalEnergyKwh: number;
+    totalDurationSeconds: number;
+    totalCost: string | null;
+    currency: string | null;
+    estimatedSavings: number | null;
+    avoidedCo2Kg: number | null;
+    averageEnergyPerSession: number;
+    averageDurationSeconds: number;
+  };
+  lastSession: ChargingHistoryItem | null;
+  mostUsedStation: {
+    id: string;
+    name: string;
+    city?: string;
+    sessionCount: number;
+    energyKwh: number;
+  } | null;
+  mostUsedConnector: {
+    type: string;
+    sessionCount: number;
+  } | null;
+  primaryVehicle: {
+    id: string;
+    nickname: string;
+    brand: string;
+    model: string;
+    year?: number;
+    batteryCapacityKwh: number;
+    connectorTypes: string[];
+  } | null;
+}
+
+export type ChargingHistorySort =
+  | 'RECENT'
+  | 'OLDEST'
+  | 'ENERGY_DESC'
+  | 'ENERGY_ASC'
+  | 'DURATION_DESC'
+  | 'DURATION_ASC'
+  | 'COST_DESC'
+  | 'COST_ASC';
+
+export interface ChargingHistoryFilters extends DashboardQuery {
+  connectorType?: PlugType;
+  status?: ChargingUiStatus;
+  stationId?: string;
+  search?: string;
+  withCost?: boolean;
+  failuresOnly?: boolean;
+  completedOnly?: boolean;
+  sort: ChargingHistorySort;
+  limit?: number;
+}
+
+export interface ChargingHistoryItem {
+  id: string;
+  station: {
+    id: string;
+    name: string;
+    city: string;
+  };
+  vehicle: {
+    id: string;
+    nickname: string;
+    brand: string;
+    model: string;
+  };
+  connector: {
+    id: string;
+    label: string;
+    type: string;
+  };
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number;
+  energyKwh: number;
+  cost: MoneyValue | null;
+  status: ChargingUiStatus;
+  failureReason: string | null;
+}
+
+export interface ChargingHistoryPage {
+  items: ChargingHistoryItem[];
+  pageInfo: {
+    endCursor: string | null;
+    hasNextPage: boolean;
+  };
+}
+
+export interface ChargingSessionDetails extends ChargingHistoryItem {
+  station: ChargingHistoryItem['station'] & {
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
+  connector: ChargingHistoryItem['connector'] & {
+    code: string;
+    number: number;
+  };
+  chargePoint: {
+    id: string;
+    externalCode: string;
+    name: string | null;
+  };
+  evse: {
+    id: string;
+    uid: string;
+  };
+  meter: {
+    startWh: string | null;
+    stopWh: string | null;
+  };
+  power: {
+    maximumPowerKw: number | null;
+    averagePowerKw: number | null;
+  };
+  tariff: {
+    name: string;
+    currency: string;
+    pricePerKwh: string;
+    activationFee: string;
+    parkingFeeHour: string;
+  } | null;
+  stopReason: string | null;
+  audit: {
+    createdAt: string;
+    updatedAt: string;
+    version: number;
+  };
+}
+
+export type ChargingTimelineEventType =
+  | 'created'
+  | 'authorized'
+  | 'starting'
+  | 'charging_started'
+  | 'first_measurement'
+  | 'stopping'
+  | 'completed'
+  | 'cancelled'
+  | 'failed';
+
+export interface ChargingSessionTimelineData {
+  sessionId: string;
+  events: {
+    occurredAt: string;
+    type: ChargingTimelineEventType;
+  }[];
+}
+
+export interface ChargingSessionMetricsData {
+  sessionId: string;
+  points: {
+    sampledAt: string;
+    accumulatedEnergyKwh: number;
+    powerKw: number | null;
+  }[];
+  summary: {
+    averagePowerKw: number | null;
+    maximumPowerKw: number | null;
+    originalPointCount: number;
+    returnedPointCount: number;
+  };
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -229,7 +418,6 @@ export interface UpdateProfileInput {
   recordVersion: number;
 }
 
-
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
@@ -250,16 +438,6 @@ export interface RegisterInput {
 export interface AuthSession {
   user: UserProfile;
   tokens: AuthTokens;
-}
-export interface ChargingHistoryItem {
-  id: string;
-  stationName: string;
-  startedAt: string;
-  durationSeconds: number;
-  energyKwh: number;
-  totalAmount: number;
-  paymentLabel: string;
-  status: 'COMPLETED' | 'FAILED' | 'REFUNDED';
 }
 
 export interface RoutePlannerInput {

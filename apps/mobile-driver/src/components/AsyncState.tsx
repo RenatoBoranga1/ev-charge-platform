@@ -49,7 +49,11 @@ export function EmptyState(props: StateProps) {
 }
 
 export function ErrorState(props: StateProps) {
-  return <StateLayout icon="alert-circle-outline" {...props} />;
+  return (
+    <View accessibilityLiveRegion="assertive" accessibilityRole="alert" accessible>
+      <StateLayout icon="alert-circle-outline" {...props} />
+    </View>
+  );
 }
 
 export function PermissionState(props: StateProps) {

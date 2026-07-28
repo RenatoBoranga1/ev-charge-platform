@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { api } from '@/api';
+import { useAuth } from '@/auth/AuthProvider';
 import { AppButton } from '@/components/AppButton';
 import { AppCard } from '@/components/AppCard';
 import { AppHeader } from '@/components/AppHeader';
@@ -13,6 +14,7 @@ import { ChargingMetricCard } from '@/components/ChargingMetricCard';
 import { ChargingProgress } from '@/components/ChargingProgress';
 import { ConfirmationDialog } from '@/components/ConfirmationDialog';
 import { Screen } from '@/components/Screen';
+import { invalidateChargingHistory } from '@/history/query-keys';
 import { chargingRealtimeClient } from '@/realtime';
 import type { ChargingConnectionState } from '@/realtime/ChargingRealtimeClient';
 import { useChargingStore } from '@/stores/charging-store';
@@ -22,17 +24,16 @@ import { formatCurrency, formatDateTime, formatDuration } from '@/utils/format';
 
 export default function ActiveChargeScreen() {
   const { colors } = useAppTheme();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const activeSession = useChargingStore((state) => state.activeSession);
   const activeSessionId = activeSession?.id;
   const applyRealtimeEvent = useChargingStore((state) => state.applyRealtimeEvent);
   const setSummary = useChargingStore((state) => state.setSummary);
   const setActiveSession = useChargingStore((state) => state.setActiveSession);
   const [confirmStop, setConfirmStop] = useState(false);
-  const [connectionState, setConnectionState] =
-    useState<ChargingConnectionState>('disconnected');
-  const stopIdempotencyKey = useRef(
-    'mobile-stop-' + (activeSessionId ?? 'recovered'),
-  );
+  const [connectionState, setConnectionState] = useState<ChargingConnectionState>('disconnected');
+  const stopIdempotencyKey = useRef('mobile-stop-' + (activeSessionId ?? 'recovered'));
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
   const [powerSamples, setPowerSamples] = useState<number[]>([68, 71, 73, 72, 74]);
   const vehicles = useQuery({
@@ -56,16 +57,16 @@ export default function ActiveChargeScreen() {
   const stopMutation = useMutation({
     mutationFn: () => {
       if (!activeSession) throw new Error('Sessão ativa não encontrada.');
-      return api.charging.stop(
-        activeSession.id,
-        stopIdempotencyKey.current,
-      );
+      return api.charging.stop(activeSession.id, stopIdempotencyKey.current);
     },
     onSuccess: (summary) => {
       chargingRealtimeClient.disconnect();
       setSummary(summary);
       setConfirmStop(false);
       router.replace('/(tabs)/charge/completed');
+      if (user) {
+        void invalidateChargingHistory(queryClient, user.id, summary.session.id);
+      }
     },
   });
 
@@ -80,13 +81,11 @@ export default function ActiveChargeScreen() {
   useEffect(() => {
     if (!activeSessionId) return undefined;
 
-    const unsubscribeConnection =
-      chargingRealtimeClient.subscribeConnection((state) => {
-        setConnectionState(state);
-        if (state === 'connected') setRealtimeError(null);
-      });
-    const unsubscribeError =
-      chargingRealtimeClient.subscribeError(setRealtimeError);
+    const unsubscribeConnection = chargingRealtimeClient.subscribeConnection((state) => {
+      setConnectionState(state);
+      if (state === 'connected') setRealtimeError(null);
+    });
+    const unsubscribeError = chargingRealtimeClient.subscribeError(setRealtimeError);
     const unsubscribe = chargingRealtimeClient.subscribe((event) => {
       applyRealtimeEvent(event);
       setPowerSamples((samples) => [...samples.slice(-11), event.currentPowerKw]);
@@ -170,11 +169,11 @@ export default function ActiveChargeScreen() {
           label="Tentar reconectar"
           variant="outline"
           onPress={() =>
-            void chargingRealtimeClient.reconnect().catch((error: unknown) =>
-              setRealtimeError(
-                error instanceof Error ? error.message : 'Falha na reconexao.',
-              ),
-            )
+            void chargingRealtimeClient
+              .reconnect()
+              .catch((error: unknown) =>
+                setRealtimeError(error instanceof Error ? error.message : 'Falha na reconexao.'),
+              )
           }
         />
       ) : null}
@@ -184,15 +183,8 @@ export default function ActiveChargeScreen() {
         percent={activeSession.estimatedBatteryPercent ?? 0}
       />
       <View style={styles.metrics}>
-        <ChargingMetricCard
-          label="Tempo"
-          value={formatDuration(activeSession.elapsedSeconds)}
-        />
-        <ChargingMetricCard
-          label="Energia"
-          value={activeSession.energyKwh.toFixed(2)}
-          unit="kWh"
-        />
+        <ChargingMetricCard label="Tempo" value={formatDuration(activeSession.elapsedSeconds)} />
+        <ChargingMetricCard label="Energia" value={activeSession.energyKwh.toFixed(2)} unit="kWh" />
         <ChargingMetricCard
           label="Potência"
           value={activeSession.currentPowerKw.toFixed(1)}
@@ -205,9 +197,7 @@ export default function ActiveChargeScreen() {
       </View>
 
       <AppCard>
-        <Text style={[styles.chartTitle, { color: colors.text }]}>
-          Potência recente
-        </Text>
+        <Text style={[styles.chartTitle, { color: colors.text }]}>Potência recente</Text>
         <View accessibilityLabel="Gráfico de potência recente" style={styles.chart}>
           {powerSamples.map((sample, index) => (
             <View
@@ -225,9 +215,7 @@ export default function ActiveChargeScreen() {
       </AppCard>
 
       <AppCard>
-        <Text style={[styles.impactTitle, { color: colors.text }]}>
-          Impacto desta sessão
-        </Text>
+        <Text style={[styles.impactTitle, { color: colors.text }]}>Impacto desta sessão</Text>
         <Text style={[styles.impactValue, { color: colors.success }]}>
           {estimateAvoidedCo2(activeSession.energyKwh).toFixed(2)} kg de CO₂ evitados
         </Text>
@@ -242,11 +230,7 @@ export default function ActiveChargeScreen() {
         ) : null}
       </AppCard>
 
-      <AppButton
-        label="Encerrar recarga"
-        variant="danger"
-        onPress={() => setConfirmStop(true)}
-      />
+      <AppButton label="Encerrar recarga" variant="danger" onPress={() => setConfirmStop(true)} />
       <View style={styles.secondaryActions}>
         <View style={styles.secondaryAction}>
           <AppButton
