@@ -6,8 +6,8 @@ import { messages } from '@/i18n/pt-BR';
 import { useAppTheme } from '@/theme/ThemeProvider';
 
 const tabIcons = {
+  dashboard: 'grid-outline',
   stations: 'location-outline',
-  trips: 'navigate-outline',
   charge: 'flash',
   vehicles: 'car-sport-outline',
   profile: 'person-outline',
@@ -62,6 +62,8 @@ export default function TabsLayout() {
           }}
         />
       ))}
+      <Tabs.Screen name="history" options={{ href: null }} />
+      <Tabs.Screen name="trips" options={{ href: null }} />
     </Tabs>
   );
 }

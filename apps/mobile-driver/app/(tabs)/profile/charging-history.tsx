@@ -9,19 +9,28 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/AsyncState';
 import { FilterChip } from '@/components/FilterChip';
 import { Screen } from '@/components/Screen';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { formatCurrency, formatDateTime, formatDuration } from '@/utils/format';
+import { formatDateTime, formatDuration, formatMoney } from '@/utils/format';
 
-type StatusFilter = 'ALL' | 'COMPLETED' | 'FAILED';
+type StatusFilter = 'all' | 'completed' | 'failed';
 
 export default function ChargingHistoryScreen() {
   const { colors } = useAppTheme();
-  const [status, setStatus] = useState<StatusFilter>('ALL');
+  const [status, setStatus] = useState<StatusFilter>('all');
   const query = useQuery({
-    queryKey: ['charging-history'],
-    queryFn: () => api.charging.getHistory(),
+    queryKey: ['charging-history', 'profile-shortcut', status],
+    queryFn: () =>
+      api.history.list({
+        ...(status === 'all' ? {} : { status }),
+        sort: 'RECENT',
+      }),
   });
 
-  if (query.isLoading) return <Screen><LoadingState title="Carregando histórico" /></Screen>;
+  if (query.isLoading)
+    return (
+      <Screen>
+        <LoadingState title="Carregando histórico" />
+      </Screen>
+    );
   if (query.isError) {
     return (
       <Screen>
@@ -34,34 +43,48 @@ export default function ChargingHistoryScreen() {
     );
   }
 
-  const history = (query.data ?? []).filter((item) => status === 'ALL' || item.status === status);
+  const history = query.data?.items ?? [];
 
   return (
     <Screen>
       <AppHeader canGoBack title="Histórico de recargas" />
       <View style={styles.filters}>
-        <FilterChip label="Todas" selected={status === 'ALL'} onPress={() => setStatus('ALL')} />
-        <FilterChip label="Concluídas" selected={status === 'COMPLETED'} onPress={() => setStatus('COMPLETED')} />
-        <FilterChip label="Com falha" selected={status === 'FAILED'} onPress={() => setStatus('FAILED')} />
+        <FilterChip label="Todas" selected={status === 'all'} onPress={() => setStatus('all')} />
+        <FilterChip
+          label="Concluídas"
+          selected={status === 'completed'}
+          onPress={() => setStatus('completed')}
+        />
+        <FilterChip
+          label="Com falha"
+          selected={status === 'failed'}
+          onPress={() => setStatus('failed')}
+        />
       </View>
       {history.length === 0 ? (
         <EmptyState title="Você ainda não realizou nenhuma recarga." />
       ) : (
         history.map((item) => (
           <AppCard key={item.id}>
-            <Text style={[styles.station, { color: colors.text }]}>{item.stationName}</Text>
-            <Text style={[styles.date, { color: colors.textMuted }]}>{formatDateTime(item.startedAt)}</Text>
+            <Text style={[styles.station, { color: colors.text }]}>{item.station.name}</Text>
+            <Text style={[styles.date, { color: colors.textMuted }]}>
+              {formatDateTime(item.startedAt)}
+            </Text>
             <View style={styles.metrics}>
               <Text style={{ color: colors.text }}>{item.energyKwh.toFixed(1)} kWh</Text>
               <Text style={{ color: colors.text }}>{formatDuration(item.durationSeconds)}</Text>
-              <Text style={[styles.amount, { color: colors.primary }]}>{formatCurrency(item.totalAmount)}</Text>
+              {item.cost ? (
+                <Text style={[styles.amount, { color: colors.primary }]}>
+                  {formatMoney(item.cost.amount, item.cost.currency)}
+                </Text>
+              ) : null}
             </View>
             <Text
               accessibilityRole="link"
-              onPress={() => Alert.alert('Recibo mock', item.paymentLabel + ' · ' + item.id)}
+              onPress={() => Alert.alert('Detalhes da sessão', item.station.name + ' · ' + item.id)}
               style={[styles.receipt, { color: colors.secondary }]}
             >
-              Abrir recibo
+              Ver identificador da sessão
             </Text>
           </AppCard>
         ))

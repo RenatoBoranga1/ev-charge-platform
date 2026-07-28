@@ -2,6 +2,8 @@ import type {
   ApiClients,
   AuthApi,
   ChargingApi,
+  ChargingHistoryApi,
+  DashboardApi,
   NearbyStationsOptions,
   PaymentsApi,
   RoutePlannerProvider,
@@ -22,6 +24,14 @@ import {
 import type {
   AuthSession,
   AuthTokens,
+  ChargingHistoryFilters,
+  ChargingHistoryItem,
+  ChargingHistoryPage,
+  ChargingSessionDetails,
+  ChargingSessionMetricsData,
+  ChargingSessionTimelineData,
+  DashboardData,
+  DashboardQuery,
   ChargingSession,
   ChargingSessionRealtimeEvent,
   ChargingSummary,
@@ -41,10 +51,7 @@ import type {
   ValidatedConnector,
   Vehicle,
 } from '@/types/domain';
-import {
-  calculatePriceBreakdown,
-  estimateAvoidedCo2,
-} from '@/utils/charging';
+import { calculatePriceBreakdown, estimateAvoidedCo2 } from '@/utils/charging';
 import { normalizeManualConnectorCode } from '@/utils/manual-code';
 import type { ChargeQrPayload } from '@/utils/qr-parser';
 import { filterStations } from '@/utils/station-filters';
@@ -127,9 +134,7 @@ export class MockUsersApi implements UsersApi {
       ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
       ...(input.city !== undefined ? { city: input.city } : {}),
       ...(input.country !== undefined ? { country: input.country } : {}),
-      ...(input.email !== undefined
-        ? { email: input.email.trim().toLowerCase() }
-        : {}),
+      ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() } : {}),
       firstName,
       ...(input.language !== undefined ? { language: input.language } : {}),
       lastName,
@@ -208,10 +213,7 @@ function findConnector(
 }
 
 export class MockStationsApi implements StationsApi {
-  async getNearby(
-    filters: StationFilters,
-    options?: NearbyStationsOptions,
-  ): Promise<Station[]> {
+  async getNearby(filters: StationFilters, options?: NearbyStationsOptions): Promise<Station[]> {
     if (options?.signal?.aborted) {
       throw new Error('A busca de estações foi cancelada.');
     }
@@ -227,10 +229,7 @@ export class MockStationsApi implements StationsApi {
     return station;
   }
 
-  async createReservation(
-    stationId: string,
-    connectorId: string,
-  ): Promise<Reservation> {
+  async createReservation(stationId: string, connectorId: string): Promise<Reservation> {
     await wait();
     const station = await this.getById(stationId);
     const connector = station.connectors.find((item) => item.id === connectorId);
@@ -330,10 +329,7 @@ export class MockChargingApi implements ChargingApi {
     };
   }
 
-  async stop(
-    sessionId: string,
-    idempotencyKey: string,
-  ): Promise<ChargingSummary> {
+  async stop(sessionId: string, idempotencyKey: string): Promise<ChargingSummary> {
     await wait(500);
     const previous = processedStopKeys.get(idempotencyKey);
     if (previous) return previous;
@@ -370,6 +366,273 @@ export class MockChargingApi implements ChargingApi {
   }
 }
 
+function toMockHistoryItem(item: (typeof mockHistory)[number]): ChargingHistoryItem {
+  const station =
+    mockStations.find((candidate) => candidate.name === item.stationName) ?? mockStations[0]!;
+  const vehicle = mockVehicles[0]!;
+  const connector = station.connectors[0] ?? mockStations[0]!.connectors[0]!;
+  return {
+    connector: {
+      id: connector.id,
+      label: `${connector.plugType} · ${connector.maximumPowerKw} kW`,
+      type: connector.plugType.toLowerCase(),
+    },
+    cost:
+      item.status === 'COMPLETED' ? { amount: item.totalAmount.toFixed(2), currency: 'BRL' } : null,
+    durationSeconds: item.durationSeconds,
+    endedAt: new Date(
+      new Date(item.startedAt).getTime() + item.durationSeconds * 1000,
+    ).toISOString(),
+    energyKwh: item.energyKwh,
+    failureReason: item.status === 'FAILED' ? 'Falha simulada' : null,
+    id: item.id,
+    startedAt: item.startedAt,
+    station: {
+      city: station.address.split('·').at(-1)?.trim() ?? 'São Paulo',
+      id: station.id,
+      name: station.name,
+    },
+    status: item.status === 'FAILED' ? 'failed' : 'completed',
+    vehicle: {
+      brand: vehicle.brand,
+      id: vehicle.id,
+      model: vehicle.model,
+      nickname: vehicle.nickname,
+    },
+  };
+}
+
+function mockDashboardData(query: DashboardQuery): DashboardData {
+  const from = query.from ?? '2026-06-01T03:00:00.000Z';
+  const to = query.to ?? new Date().toISOString();
+  const periodItems = mockHistory
+    .map(toMockHistoryItem)
+    .filter((item) => {
+      const timestamp = new Date(item.startedAt).getTime();
+      return timestamp >= new Date(from).getTime() && timestamp <= new Date(to).getTime();
+    })
+    .filter((item) => !query.vehicleId || item.vehicle.id === query.vehicleId);
+  const completed = periodItems.filter((item) => item.status === 'completed');
+  const totalCost = completed.reduce((total, item) => total + Number(item.cost?.amount ?? 0), 0);
+  return {
+    driver: {
+      firstName: mockProfile.firstName,
+      name: mockProfile.name,
+    },
+    lastSession: periodItems[0] ?? null,
+    mostUsedConnector:
+      periodItems.length > 0 ? { sessionCount: periodItems.length, type: 'ccs2' } : null,
+    mostUsedStation:
+      periodItems.length > 0
+        ? {
+            city: periodItems[0]!.station.city,
+            energyKwh: periodItems.reduce((total, item) => total + item.energyKwh, 0),
+            id: periodItems[0]!.station.id,
+            name: periodItems[0]!.station.name,
+            sessionCount: periodItems.length,
+          }
+        : null,
+    period: {
+      from,
+      timezone: query.timezone ?? 'America/Sao_Paulo',
+      to,
+    },
+    primaryVehicle: {
+      batteryCapacityKwh: mockVehicles[0]!.batteryCapacityKwh,
+      brand: mockVehicles[0]!.brand,
+      connectorTypes: mockVehicles[0]!.supportedPlugTypes.map((type) => type.toLowerCase()),
+      id: mockVehicles[0]!.id,
+      model: mockVehicles[0]!.model,
+      nickname: mockVehicles[0]!.nickname,
+      ...(mockVehicles[0]!.year !== undefined ? { year: mockVehicles[0]!.year } : {}),
+    },
+    summary: {
+      avoidedCo2Kg: null,
+      averageDurationSeconds:
+        periodItems.length > 0
+          ? Math.round(
+              periodItems.reduce((total, item) => total + item.durationSeconds, 0) /
+                periodItems.length,
+            )
+          : 0,
+      averageEnergyPerSession:
+        periodItems.length > 0
+          ? periodItems.reduce((total, item) => total + item.energyKwh, 0) / periodItems.length
+          : 0,
+      cancelledSessions: 0,
+      completedSessions: completed.length,
+      currency: completed.length > 0 ? 'BRL' : null,
+      estimatedSavings: null,
+      failedSessions: periodItems.filter((item) => item.status === 'failed').length,
+      totalCost: completed.length > 0 ? totalCost.toFixed(2) : null,
+      totalDurationSeconds: periodItems.reduce((total, item) => total + item.durationSeconds, 0),
+      totalEnergyKwh: periodItems.reduce((total, item) => total + item.energyKwh, 0),
+      totalSessions: periodItems.length,
+    },
+  };
+}
+
+export class MockDashboardApi implements DashboardApi {
+  async get(query: DashboardQuery = {}): Promise<DashboardData> {
+    await wait();
+    return mockDashboardData(query);
+  }
+}
+
+export class MockChargingHistoryApi implements ChargingHistoryApi {
+  async list(filters: ChargingHistoryFilters, cursor?: string): Promise<ChargingHistoryPage> {
+    await wait();
+    let items = mockHistory.map(toMockHistoryItem);
+    if (filters.from) {
+      const from = new Date(filters.from).getTime();
+      items = items.filter((item) => new Date(item.startedAt).getTime() >= from);
+    }
+    if (filters.to) {
+      const to = new Date(filters.to).getTime();
+      items = items.filter((item) => new Date(item.startedAt).getTime() <= to);
+    }
+    if (filters.vehicleId) {
+      items = items.filter((item) => item.vehicle.id === filters.vehicleId);
+    }
+    if (filters.stationId) {
+      items = items.filter((item) => item.station.id === filters.stationId);
+    }
+    if (filters.connectorType) {
+      items = items.filter((item) => item.connector.type === filters.connectorType?.toLowerCase());
+    }
+    if (filters.withCost !== undefined) {
+      items = items.filter((item) => Boolean(item.cost) === filters.withCost);
+    }
+    if (filters.failuresOnly) {
+      items = items.filter((item) => item.status === 'failed');
+    }
+    if (filters.completedOnly) {
+      items = items.filter((item) => item.status === 'completed');
+    }
+    if (filters.status) {
+      items = items.filter((item) => item.status === filters.status);
+    }
+    if (filters.search) {
+      const search = filters.search.toLocaleLowerCase('pt-BR');
+      items = items.filter(
+        (item) =>
+          item.station.name.toLocaleLowerCase('pt-BR').includes(search) ||
+          item.station.city.toLocaleLowerCase('pt-BR').includes(search),
+      );
+    }
+    items = [...items].sort((left, right) => {
+      const direction = filters.sort.endsWith('_ASC') ? 1 : -1;
+      if (filters.sort.startsWith('ENERGY')) {
+        return direction * (left.energyKwh - right.energyKwh);
+      }
+      if (filters.sort.startsWith('DURATION')) {
+        return direction * (left.durationSeconds - right.durationSeconds);
+      }
+      if (filters.sort.startsWith('COST')) {
+        const leftCost = left.cost ? Number(left.cost.amount) : null;
+        const rightCost = right.cost ? Number(right.cost.amount) : null;
+        if (leftCost === null && rightCost === null) return 0;
+        if (leftCost === null) return 1;
+        if (rightCost === null) return -1;
+        return direction * (leftCost - rightCost);
+      }
+      return filters.sort === 'OLDEST'
+        ? left.startedAt.localeCompare(right.startedAt)
+        : right.startedAt.localeCompare(left.startedAt);
+    });
+    if (cursor && !/^mock:\d+$/.test(cursor)) {
+      throw new Error('Cursor de histórico inválido.');
+    }
+    const offset = cursor?.startsWith('mock:') ? Number(cursor.slice('mock:'.length)) : 0;
+    const limit = filters.limit ?? 20;
+    const pageItems = items.slice(offset, offset + limit);
+    const nextOffset = offset + pageItems.length;
+    return {
+      items: pageItems,
+      pageInfo: {
+        endCursor: nextOffset < items.length ? `mock:${nextOffset}` : null,
+        hasNextPage: nextOffset < items.length,
+      },
+    };
+  }
+
+  async getDetails(sessionId: string): Promise<ChargingSessionDetails> {
+    await wait();
+    const item = mockHistory.map(toMockHistoryItem).find((candidate) => candidate.id === sessionId);
+    if (!item) throw new Error('Sessão não encontrada.');
+    return {
+      ...item,
+      audit: {
+        createdAt: item.startedAt,
+        updatedAt: item.endedAt ?? item.startedAt,
+        version: 1,
+      },
+      chargePoint: {
+        externalCode: 'CP-SOLIS-001',
+        id: ids.chargePointOne,
+        name: 'Carregador principal',
+      },
+      connector: {
+        ...item.connector,
+        code: 'SOLIS-001-A',
+        number: 1,
+      },
+      evse: { id: ids.evseOne, uid: 'EVSE-CP-SOLIS-001' },
+      meter: {
+        startWh: '1000',
+        stopWh: String(1000 + item.energyKwh * 1000),
+      },
+      power: { averagePowerKw: 42, maximumPowerKw: 74 },
+      station: {
+        ...item.station,
+        address: 'Av. Ipiranga, 320',
+        latitude: -23.55052,
+        longitude: -46.633308,
+      },
+      stopReason: item.failureReason,
+      tariff: item.cost
+        ? {
+            activationFee: '0.00',
+            currency: item.cost.currency,
+            name: 'Tarifa padrão',
+            parkingFeeHour: '0.00',
+            pricePerKwh: '2.1900',
+          }
+        : null,
+    };
+  }
+
+  async getTimeline(sessionId: string): Promise<ChargingSessionTimelineData> {
+    const details = await this.getDetails(sessionId);
+    return {
+      events: [
+        { occurredAt: details.startedAt, type: 'created' },
+        { occurredAt: details.startedAt, type: 'authorized' },
+        { occurredAt: details.startedAt, type: 'charging_started' },
+        {
+          occurredAt: details.endedAt ?? details.startedAt,
+          type: details.status === 'failed' ? 'failed' : 'completed',
+        },
+      ],
+      sessionId,
+    };
+  }
+
+  async getMetrics(sessionId: string): Promise<ChargingSessionMetricsData> {
+    const details = await this.getDetails(sessionId);
+    return {
+      points: [],
+      sessionId,
+      summary: {
+        averagePowerKw: details.power.averagePowerKw,
+        maximumPowerKw: details.power.maximumPowerKw,
+        originalPointCount: 0,
+        returnedPointCount: 0,
+      },
+    };
+  }
+}
+
 export class MockVehiclesApi implements VehiclesApi {
   async list(filters: VehicleListFilters = {}): Promise<Vehicle[]> {
     await wait();
@@ -400,10 +663,7 @@ export class MockVehiclesApi implements VehiclesApi {
     return vehicle;
   }
 
-  async update(
-    vehicleId: string,
-    input: VehicleUpdateInput,
-  ): Promise<Vehicle> {
+  async update(vehicleId: string, input: VehicleUpdateInput): Promise<Vehicle> {
     await wait();
     const current = this.requireVehicle(vehicleId);
     if (current.recordVersion !== input.recordVersion) {
@@ -437,10 +697,7 @@ export class MockVehiclesApi implements VehiclesApi {
     return this.update(vehicleId, { isDefault: true, recordVersion });
   }
 
-  async duplicate(
-    vehicleId: string,
-    recordVersion: number,
-  ): Promise<Vehicle> {
+  async duplicate(vehicleId: string, recordVersion: number): Promise<Vehicle> {
     const current = await this.getById(vehicleId);
     if (current.recordVersion !== recordVersion) {
       throw new Error('O veículo foi alterado. Atualize e tente novamente.');
@@ -505,8 +762,7 @@ export class MockVehiclesApi implements VehiclesApi {
     const duplicate = vehicleState.some(
       (vehicle) =>
         vehicle.id !== excludeId &&
-        ((licensePlate &&
-          vehicle.licensePlate?.toUpperCase() === licensePlate) ||
+        ((licensePlate && vehicle.licensePlate?.toUpperCase() === licensePlate) ||
           (vin && vehicle.vin?.toUpperCase() === vin)),
     );
     if (duplicate) throw new Error('Já existe um veículo com esta placa ou VIN.');
@@ -549,11 +805,8 @@ export class MockRoutePlannerProvider implements RoutePlannerProvider {
     if (!vehicle) throw new Error('Selecione um veículo válido.');
 
     const distanceKm = input.priority === 'SHORTEST_TIME' ? 326 : 311;
-    const consumptionPerKm =
-      (vehicle.averageConsumptionKwhPer100Km ?? 17) / 100;
-    const estimatedConsumptionKwh = Number(
-      (distanceKm * consumptionPerKm).toFixed(1),
-    );
+    const consumptionPerKm = (vehicle.averageConsumptionKwhPer100Km ?? 17) / 100;
+    const estimatedConsumptionKwh = Number((distanceKm * consumptionPerKm).toFixed(1));
 
     return {
       distanceKm,
@@ -579,6 +832,8 @@ export function createMockApiClients(): ApiClients {
   return {
     auth: new MockAuthApi(),
     users: new MockUsersApi(),
+    dashboard: new MockDashboardApi(),
+    history: new MockChargingHistoryApi(),
     stations: new MockStationsApi(),
     charging: new MockChargingApi(),
     vehicles: new MockVehiclesApi(),

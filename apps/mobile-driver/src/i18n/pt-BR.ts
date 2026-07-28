@@ -9,7 +9,7 @@ export const messages = {
   },
   tabs: {
     stations: 'Estações',
-    trips: 'Viagens',
+    dashboard: 'Início',
     charge: 'Carregar',
     vehicles: 'Veículos',
     profile: 'Perfil',

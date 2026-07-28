@@ -2,6 +2,8 @@ import type {
   ApiClients,
   AuthApi,
   ChargingApi,
+  ChargingHistoryApi,
+  DashboardApi,
   NearbyStationsOptions,
   PaymentsApi,
   RoutePlannerProvider,
@@ -15,7 +17,13 @@ import { AppLogger } from '@/logging/AppLogger';
 import type {
   AuthSession,
   AuthTokens,
-  ChargingHistoryItem,
+  ChargingHistoryFilters,
+  ChargingHistoryPage,
+  ChargingSessionDetails,
+  ChargingSessionMetricsData,
+  ChargingSessionTimelineData,
+  DashboardData,
+  DashboardQuery,
   ChargingSession,
   ChargingSessionRealtimeEvent,
   ChargingSummary,
@@ -52,11 +60,7 @@ export class RestClient {
   constructor(private readonly baseUrl: string) {}
 
   async request<T>(path: string, init: RestRequestInit = {}): Promise<T> {
-    const {
-      retryOnUnauthorized = true,
-      skipAuth = false,
-      ...requestInit
-    } = init;
+    const { retryOnUnauthorized = true, skipAuth = false, ...requestInit } = init;
     const headers = new Headers(requestInit.headers);
     headers.set('Content-Type', 'application/json');
 
@@ -77,9 +81,7 @@ export class RestClient {
 
     if (!response.ok) {
       const body = await this.parseBody<ApiErrorBody>(response);
-      const details = Array.isArray(body?.message)
-        ? body.message.join(' ')
-        : body?.message;
+      const details = Array.isArray(body?.message) ? body.message.join(' ') : body?.message;
       AppLogger.error('API request failed', {
         path,
         status: response.status,
@@ -183,10 +185,7 @@ class RestUsersApi implements UsersApi {
 class RestStationsApi implements StationsApi {
   constructor(private readonly client: RestClient) {}
 
-  getNearby(
-    filters: StationFilters,
-    options?: NearbyStationsOptions,
-  ): Promise<Station[]> {
+  getNearby(filters: StationFilters, options?: NearbyStationsOptions): Promise<Station[]> {
     const query = new URLSearchParams({
       distanceKm: String(filters.maximumDistanceKm),
       minimumPowerKw: String(filters.minimumPowerKw),
@@ -223,57 +222,41 @@ class RestChargingApi implements ChargingApi {
   constructor(private readonly client: RestClient) {}
 
   validateQr(payload: ChargeQrPayload): Promise<ValidatedConnector> {
-    return this.client.request<ValidatedConnector>(
-      '/v1/charging-sessions/validate-qr',
-      {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      },
-    );
+    return this.client.request<ValidatedConnector>('/v1/charging-sessions/validate-qr', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   validateManualCode(code: string): Promise<ValidatedConnector> {
-    return this.client.request<ValidatedConnector>(
-      '/v1/charging-sessions/validate-qr',
-      {
-        method: 'POST',
-        body: JSON.stringify({ code }),
-      },
-    );
+    return this.client.request<ValidatedConnector>('/v1/charging-sessions/validate-qr', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
   }
 
   async start(input: StartChargingInput): Promise<ChargingSession> {
-    const created = await this.client.request<ChargingSession>(
-      '/v1/charging-sessions',
-      {
-        method: 'POST',
-        headers: { 'Idempotency-Key': input.idempotencyKey },
-        body: JSON.stringify({
-          connectorId: input.validatedConnector.connector.id,
-          paymentMethodId: input.paymentMethodId,
-          vehicleId: input.vehicleId,
-        }),
-      },
-    );
-    return this.client.request<ChargingSession>(
-      '/v1/charging-sessions/' + created.id + '/start',
-      {
-        method: 'POST',
-        headers: { 'Idempotency-Key': input.idempotencyKey + ':start' },
-      },
-    );
+    const created = await this.client.request<ChargingSession>('/v1/charging-sessions', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': input.idempotencyKey },
+      body: JSON.stringify({
+        connectorId: input.validatedConnector.connector.id,
+        paymentMethodId: input.paymentMethodId,
+        vehicleId: input.vehicleId,
+      }),
+    });
+    return this.client.request<ChargingSession>('/v1/charging-sessions/' + created.id + '/start', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': input.idempotencyKey + ':start' },
+    });
   }
 
   getActive(): Promise<ChargingSession | null> {
-    return this.client.request<ChargingSession | null>(
-      '/v1/charging-sessions/active',
-    );
+    return this.client.request<ChargingSession | null>('/v1/charging-sessions/active');
   }
 
   getById(sessionId: string): Promise<ChargingSession> {
-    return this.client.request<ChargingSession>(
-      `/v1/charging-sessions/${sessionId}`,
-    );
+    return this.client.request<ChargingSession>(`/v1/charging-sessions/${sessionId}`);
   }
 
   getMetrics(sessionId: string): Promise<ChargingSessionRealtimeEvent> {
@@ -283,18 +266,90 @@ class RestChargingApi implements ChargingApi {
   }
 
   stop(sessionId: string, idempotencyKey: string): Promise<ChargingSummary> {
-    return this.client.request<ChargingSummary>(
-      `/v1/charging-sessions/${sessionId}/stop`,
-      {
-        method: 'POST',
-        headers: { 'Idempotency-Key': idempotencyKey },
-      },
+    return this.client.request<ChargingSummary>(`/v1/charging-sessions/${sessionId}/stop`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
+  }
+}
+
+function appendDashboardQuery(query: URLSearchParams, input: DashboardQuery): void {
+  if (input.from) query.set('from', input.from);
+  if (input.to) query.set('to', input.to);
+  if (input.timezone) query.set('timezone', input.timezone);
+  if (input.vehicleId) query.set('vehicleId', input.vehicleId);
+}
+
+class RestDashboardApi implements DashboardApi {
+  constructor(private readonly client: RestClient) {}
+
+  get(input: DashboardQuery = {}, signal?: AbortSignal): Promise<DashboardData> {
+    const query = new URLSearchParams();
+    appendDashboardQuery(query, input);
+    const suffix = query.size > 0 ? `?${query}` : '';
+    return this.client.request<DashboardData>(
+      `/v1/users/me/dashboard${suffix}`,
+      signal ? { signal } : {},
+    );
+  }
+}
+
+class RestChargingHistoryApi implements ChargingHistoryApi {
+  constructor(private readonly client: RestClient) {}
+
+  list(
+    filters: ChargingHistoryFilters,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<ChargingHistoryPage> {
+    const query = new URLSearchParams();
+    appendDashboardQuery(query, filters);
+    query.set('sort', filters.sort);
+    if (filters.limit) query.set('limit', String(filters.limit));
+    if (cursor) query.set('cursor', cursor);
+    if (filters.stationId) query.set('stationId', filters.stationId);
+    if (filters.status) query.set('status', filters.status.toUpperCase());
+    if (filters.connectorType) {
+      query.set('connectorType', filters.connectorType);
+    }
+    if (filters.search) query.set('search', filters.search);
+    if (filters.withCost !== undefined) {
+      query.set('withCost', String(filters.withCost));
+    }
+    if (filters.failuresOnly !== undefined) {
+      query.set('failuresOnly', String(filters.failuresOnly));
+    }
+    if (filters.completedOnly !== undefined) {
+      query.set('completedOnly', String(filters.completedOnly));
+    }
+    return this.client.request<ChargingHistoryPage>(
+      `/v1/users/me/charging-sessions?${query}`,
+      signal ? { signal } : {},
     );
   }
 
-  getHistory(): Promise<ChargingHistoryItem[]> {
-    return this.client.request<ChargingHistoryItem[]>(
-      '/v1/charging-sessions/history',
+  getDetails(sessionId: string, signal?: AbortSignal): Promise<ChargingSessionDetails> {
+    return this.client.request<ChargingSessionDetails>(
+      `/v1/users/me/charging-sessions/${sessionId}`,
+      signal ? { signal } : {},
+    );
+  }
+
+  getTimeline(sessionId: string, signal?: AbortSignal): Promise<ChargingSessionTimelineData> {
+    return this.client.request<ChargingSessionTimelineData>(
+      `/v1/users/me/charging-sessions/${sessionId}/timeline`,
+      signal ? { signal } : {},
+    );
+  }
+
+  getMetrics(
+    sessionId: string,
+    maxPoints = 60,
+    signal?: AbortSignal,
+  ): Promise<ChargingSessionMetricsData> {
+    return this.client.request<ChargingSessionMetricsData>(
+      `/v1/users/me/charging-sessions/${sessionId}/metrics?maxPoints=${maxPoints}`,
+      signal ? { signal } : {},
     );
   }
 }
@@ -325,42 +380,30 @@ class RestVehiclesApi implements VehiclesApi {
   }
 
   update(vehicleId: string, input: VehicleUpdateInput): Promise<Vehicle> {
-    return this.client.request<Vehicle>(
-      `/v1/users/me/vehicles/${vehicleId}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(input),
-      },
-    );
+    return this.client.request<Vehicle>(`/v1/users/me/vehicles/${vehicleId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
   }
   setDefault(vehicleId: string, recordVersion: number): Promise<Vehicle> {
-    return this.client.request<Vehicle>(
-      `/v1/users/me/vehicles/${vehicleId}/default`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ recordVersion }),
-      },
-    );
+    return this.client.request<Vehicle>(`/v1/users/me/vehicles/${vehicleId}/default`, {
+      method: 'POST',
+      body: JSON.stringify({ recordVersion }),
+    });
   }
 
   duplicate(vehicleId: string, recordVersion: number): Promise<Vehicle> {
-    return this.client.request<Vehicle>(
-      `/v1/users/me/vehicles/${vehicleId}/duplicate`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ recordVersion }),
-      },
-    );
+    return this.client.request<Vehicle>(`/v1/users/me/vehicles/${vehicleId}/duplicate`, {
+      method: 'POST',
+      body: JSON.stringify({ recordVersion }),
+    });
   }
 
   async remove(vehicleId: string, recordVersion: number): Promise<void> {
-    await this.client.request<void>(
-      `/v1/users/me/vehicles/${vehicleId}`,
-      {
-        method: 'DELETE',
-        body: JSON.stringify({ recordVersion }),
-      },
-    );
+    await this.client.request<void>(`/v1/users/me/vehicles/${vehicleId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ recordVersion }),
+    });
   }
 }
 
@@ -372,10 +415,9 @@ class RestPaymentsApi implements PaymentsApi {
   }
 
   setDefault(paymentMethodId: string): Promise<PaymentMethod[]> {
-    return this.client.request<PaymentMethod[]>(
-      `/v1/payment-methods/${paymentMethodId}/default`,
-      { method: 'POST' },
-    );
+    return this.client.request<PaymentMethod[]>(`/v1/payment-methods/${paymentMethodId}/default`, {
+      method: 'POST',
+    });
   }
 
   async remove(paymentMethodId: string): Promise<void> {
@@ -408,6 +450,8 @@ export function createRestApiClients(baseUrl: string): ApiClients {
   return {
     auth: new RestAuthApi(client),
     users: new RestUsersApi(client),
+    dashboard: new RestDashboardApi(client),
+    history: new RestChargingHistoryApi(client),
     stations: new RestStationsApi(client),
     charging: new RestChargingApi(client),
     vehicles: new RestVehiclesApi(client),
