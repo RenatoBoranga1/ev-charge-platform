@@ -9,10 +9,11 @@ import type { DashboardQueryDto } from './dto/dashboard-query.dto';
 const sessionSelection = {
   completedAt: true,
   connector: {
-    select: { plugType: true },
+    select: { id: true, maximumPowerKw: true, plugType: true },
   },
   createdAt: true,
   energyKwh: true,
+  failureReason: true,
   id: true,
   startedAt: true,
   station: {
@@ -42,18 +43,13 @@ export interface UsageAggregate {
 function durationSeconds(session: DashboardSession, now: Date): number {
   if (!session.startedAt) return 0;
   const end = session.completedAt ?? session.stoppedAt ?? now;
-  return Math.max(
-    0,
-    Math.floor((end.getTime() - session.startedAt.getTime()) / 1000),
-  );
+  return Math.max(0, Math.floor((end.getTime() - session.startedAt.getTime()) / 1000));
 }
 
 function tariffCurrency(value: Prisma.JsonValue): string | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const currency = (value as Record<string, unknown>).currency;
-  return typeof currency === 'string' && /^[A-Z]{3}$/.test(currency)
-    ? currency
-    : null;
+  return typeof currency === 'string' && /^[A-Z]{3}$/.test(currency) ? currency : null;
 }
 
 function sessionCost(
@@ -98,9 +94,7 @@ function aggregateUsage(sessions: DashboardSession[]): {
         rightCount - leftCount || leftType.localeCompare(rightType),
     )[0] ?? null;
   return {
-    connector: connectorEntry
-      ? { sessionCount: connectorEntry[1], type: connectorEntry[0] }
-      : null,
+    connector: connectorEntry ? { sessionCount: connectorEntry[1], type: connectorEntry[0] } : null,
     station,
   };
 }
@@ -170,17 +164,19 @@ export class DashboardService {
     ]);
     if (!profile) throw new NotFoundException('Usuario nao encontrado.');
 
-    const costs = sessions.flatMap((session) => {
+    const completedSessions = sessions.filter(
+      (session) => session.status === ChargingSessionStatus.COMPLETED,
+    );
+    const costs = completedSessions.flatMap((session) => {
       const cost = sessionCost(session);
       return cost ? [cost] : [];
     });
     const currencies = new Set(costs.map((cost) => cost.currency));
     const totalCost =
-      costs.length > 0 && currencies.size === 1
-        ? costs.reduce(
-            (total, cost) => total.plus(cost.amount),
-            new Prisma.Decimal(0),
-          )
+      completedSessions.length > 0 &&
+      costs.length === completedSessions.length &&
+      currencies.size === 1
+        ? costs.reduce((total, cost) => total.plus(cost.amount), new Prisma.Decimal(0))
         : null;
     const totalDurationSeconds = sessions.reduce(
       (total, session) => total + durationSeconds(session, period.to),
@@ -196,13 +192,16 @@ export class DashboardService {
 
     return {
       driver: {
-        firstName:
-          profile.firstName ?? profile.name.split(' ')[0] ?? profile.name,
+        firstName: profile.firstName ?? profile.name.split(' ')[0] ?? profile.name,
         name: profile.name,
       },
       lastSession: last
         ? {
-            connector: last.connector.plugType.toLowerCase(),
+            connector: {
+              id: last.connector.id,
+              label: `${last.connector.plugType} - ${Number(last.connector.maximumPowerKw)} kW`,
+              type: last.connector.plugType.toLowerCase(),
+            },
             cost: lastCost
               ? {
                   amount: lastCost.amount.toFixed(2),
@@ -210,9 +209,9 @@ export class DashboardService {
                 }
               : null,
             durationSeconds: durationSeconds(last, period.to),
-            endedAt:
-              (last.completedAt ?? last.stoppedAt)?.toISOString() ?? null,
+            endedAt: (last.completedAt ?? last.stoppedAt)?.toISOString() ?? null,
             energyKwh: Math.max(0, Number(last.energyKwh)),
+            failureReason: last.failureReason,
             id: last.id,
             startedAt: (last.startedAt ?? last.createdAt).toISOString(),
             station: {
@@ -235,21 +234,15 @@ export class DashboardService {
         ? {
             ...primaryVehicle,
             batteryCapacityKwh: Number(primaryVehicle.batteryCapacityKwh),
-            connectorTypes: primaryVehicle.supportedPlugTypes.map((type) =>
-              type.toLowerCase(),
-            ),
+            connectorTypes: primaryVehicle.supportedPlugTypes.map((type) => type.toLowerCase()),
           }
         : null,
       summary: {
         avoidedCo2Kg: null,
         averageDurationSeconds:
-          sessions.length > 0
-            ? Math.round(totalDurationSeconds / sessions.length)
-            : 0,
+          sessions.length > 0 ? Math.round(totalDurationSeconds / sessions.length) : 0,
         averageEnergyPerSession:
-          sessions.length > 0
-            ? Number((totalEnergyKwh / sessions.length).toFixed(3))
-            : 0,
+          sessions.length > 0 ? Number((totalEnergyKwh / sessions.length).toFixed(3)) : 0,
         cancelledSessions: sessions.filter(
           (session) => session.status === ChargingSessionStatus.CANCELLED,
         ).length,
