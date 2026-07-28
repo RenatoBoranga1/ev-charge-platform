@@ -17,6 +17,8 @@ module.exports = {
     'src/stores/map-store.ts',
     'src/components/StationMapMarker.tsx',
     'src/components/StationPreviewCard.tsx',
+    'src/dashboard/periods.ts',
+    'src/history/query-keys.ts',
   ],
   coverageThreshold: {
     global: {

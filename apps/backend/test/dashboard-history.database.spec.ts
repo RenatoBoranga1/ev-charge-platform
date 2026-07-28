@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   ChargingSessionStatus,
+  PlugType,
   UserRole,
   VehicleStatus,
   VehicleType,
@@ -17,8 +18,7 @@ import { HistoryCursorCodec } from '../src/charging-history/history-cursor';
 import { DashboardService } from '../src/dashboard/dashboard.service';
 import { PrismaService } from '../src/database/prisma.service';
 
-const describeDatabase =
-  process.env.RUN_DB_TESTS === 'true' ? describe : describe.skip;
+const describeDatabase = process.env.RUN_DB_TESTS === 'true' ? describe : describe.skip;
 
 describeDatabase('Dashboard and charging history database integration', () => {
   const prisma = new PrismaService();
@@ -40,19 +40,14 @@ describeDatabase('Dashboard and charging history database integration', () => {
     sub: ids.user,
     tenantId: ids.tenant,
   };
-  const repository = new ChargingHistoryRepository(
-    prisma,
-    new HistoryCursorCodec(),
-  );
+  const repository = new ChargingHistoryRepository(prisma, new HistoryCursorCodec());
   const history = new ChargingHistoryService(repository, prisma);
   const dashboard = new DashboardService(prisma);
   const createdIds: string[] = [];
   const now = new Date();
   const from = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
 
-  const query = (
-    overrides: Partial<ChargingHistoryQueryDto> = {},
-  ): ChargingHistoryQueryDto => ({
+  const query = (overrides: Partial<ChargingHistoryQueryDto> = {}): ChargingHistoryQueryDto => ({
     from: from.toISOString(),
     limit: 20,
     sort: ChargingHistorySort.RECENT,
@@ -74,15 +69,11 @@ describeDatabase('Dashboard and charging history database integration', () => {
     const session = await prisma.chargingSession.create({
       data: {
         chargePointId: ids.chargePoint,
-        completedAt:
-          input.status === ChargingSessionStatus.COMPLETED ? endedAt : null,
+        completedAt: input.status === ChargingSessionStatus.COMPLETED ? endedAt : null,
         connectorId: ids.connector,
         energyKwh: input.energyKwh,
         evseId: ids.evse,
-        failureReason:
-          input.status === ChargingSessionStatus.FAILED
-            ? 'Falha controlada'
-            : null,
+        failureReason: input.status === ChargingSessionStatus.FAILED ? 'Falha controlada' : null,
         idempotencyKey: `phase4-${randomUUID()}`,
         meterStartWh: 1000,
         meterStopWh: BigInt(1000 + input.energyKwh * 1000),
@@ -181,10 +172,7 @@ describeDatabase('Dashboard and charging history database integration', () => {
     });
     await prisma.chargingSession.deleteMany({
       where: {
-        OR: [
-          { id: { in: createdIds } },
-          { idempotencyKey: { startsWith: 'phase4-' } },
-        ],
+        OR: [{ id: { in: createdIds } }, { idempotencyKey: { startsWith: 'phase4-' } }],
       },
     });
     await prisma.vehicle.deleteMany({
@@ -242,6 +230,31 @@ describeDatabase('Dashboard and charging history database integration', () => {
     expect(result.primaryVehicle?.id).toBe(ids.vehicle);
   });
 
+  it('returns a null total when any completed-session cost is unreliable', async () => {
+    await createSession({
+      ageHours: 4,
+      energyKwh: 5,
+      status: ChargingSessionStatus.COMPLETED,
+      totalAmount: 10,
+    });
+    const invalid = await createSession({
+      ageHours: 8,
+      energyKwh: 4,
+      status: ChargingSessionStatus.COMPLETED,
+      totalAmount: 8,
+    });
+    await prisma.chargingSession.update({
+      data: { tariffSnapshot: { currency: 'invalid' } },
+      where: { id: invalid.id },
+    });
+
+    const result = await dashboard.getDashboard(authUser, {
+      from: from.toISOString(),
+      timezone: 'America/Sao_Paulo',
+      to: now.toISOString(),
+    });
+    expect(result.summary).toMatchObject({ currency: null, totalCost: null });
+  });
   it('returns an empty dashboard and rejects another user vehicle', async () => {
     const empty = await dashboard.getDashboard(
       { ...authUser, sub: otherUserId },
@@ -299,25 +312,46 @@ describeDatabase('Dashboard and charging history database integration', () => {
       3,
     );
 
-    const energy = await history.list(
-      authUser,
-      query({ sort: ChargingHistorySort.ENERGY_DESC }),
-    );
+    const energy = await history.list(authUser, query({ sort: ChargingHistorySort.ENERGY_DESC }));
     expect(energy.items.map((item) => item.energyKwh)).toEqual([10, 5, 1]);
-    const failed = await history.list(
+    const energyAscending = await history.list(
       authUser,
-      query({ failuresOnly: 'true' }),
+      query({ sort: ChargingHistorySort.ENERGY_ASC }),
     );
+    expect(energyAscending.items.map((item) => item.energyKwh)).toEqual([1, 5, 10]);
+    const completed = await history.list(authUser, query({ completedOnly: 'true' }));
+    expect(completed.items).toHaveLength(2);
+    expect(completed.items.every((item) => item.status === 'completed')).toBe(true);
+    const filtered = await history.list(
+      authUser,
+      query({
+        connectorType: PlugType.CCS2,
+        search: 'Solis',
+        stationId: ids.station,
+        status: ChargingSessionStatus.COMPLETED,
+        vehicleId: ids.vehicle,
+        withCost: 'true',
+      }),
+    );
+    expect(filtered.items).toHaveLength(2);
+    const costDescending = await history.list(
+      authUser,
+      query({ sort: ChargingHistorySort.COST_DESC }),
+    );
+    expect(
+      costDescending.items.filter((item) => item.cost).map((item) => item.cost?.amount),
+    ).toEqual(['20.00', '10.00']);
+    const failed = await history.list(authUser, query({ failuresOnly: 'true' }));
     expect(failed.items).toHaveLength(1);
     expect(failed.items[0]).toMatchObject({
       cost: null,
       status: 'failed',
     });
-    await expect(
-      history.list(authUser, query({ cursor: 'invalid.cursor' })),
-    ).rejects.toMatchObject({
-      response: { code: 'INVALID_CURSOR' },
-    });
+    await expect(history.list(authUser, query({ cursor: 'invalid.cursor' }))).rejects.toMatchObject(
+      {
+        response: { code: 'INVALID_CURSOR' },
+      },
+    );
   });
 
   it('returns safe details, timeline and downsampled metrics', async () => {
@@ -377,6 +411,63 @@ describeDatabase('Dashboard and charging history database integration', () => {
       maximumPowerKw: 44,
       originalPointCount: 25,
     });
+  });
+
+  it('represents active and cancelled sessions and hides soft-deleted records', async () => {
+    const active = await createSession({
+      ageHours: 2,
+      energyKwh: 2,
+      status: ChargingSessionStatus.CHARGING,
+      totalAmount: 0,
+    });
+    const cancelled = await createSession({
+      ageHours: 8,
+      energyKwh: 0,
+      status: ChargingSessionStatus.CANCELLED,
+      totalAmount: 0,
+    });
+
+    const activeDetails = await history.getDetails(active.id, authUser);
+    expect(activeDetails).toMatchObject({
+      cost: null,
+      status: 'charging',
+    });
+    const cancelledDetails = await history.getDetails(cancelled.id, authUser);
+    expect(cancelledDetails).toMatchObject({
+      cost: null,
+      status: 'cancelled',
+    });
+
+    await prisma.chargingSession.update({
+      data: { deletedAt: new Date() },
+      where: { id: cancelled.id },
+    });
+    const listed = await history.list(authUser, query());
+    expect(listed.items.map((item) => item.id)).toContain(active.id);
+    expect(listed.items.map((item) => item.id)).not.toContain(cancelled.id);
+    await expect(history.getDetails(cancelled.id, authUser)).rejects.toThrow(
+      'Sessao nao encontrada.',
+    );
+    await expect(history.getDetails(randomUUID(), authUser)).rejects.toThrow(
+      'Sessao nao encontrada.',
+    );
+  });
+
+  it('serves concurrent reads without leaking or duplicating sessions', async () => {
+    const session = await createSession({
+      ageHours: 2,
+      energyKwh: 2,
+      status: ChargingSessionStatus.COMPLETED,
+      totalAmount: 4,
+    });
+    const [first, second, details] = await Promise.all([
+      history.list(authUser, query()),
+      history.list(authUser, query()),
+      history.getDetails(session.id, authUser),
+    ]);
+    expect(first).toEqual(second);
+    expect(first.items.filter((item) => item.id === session.id)).toHaveLength(1);
+    expect(details.id).toBe(session.id);
   });
 
   it('isolates sessions by user and tenant', async () => {

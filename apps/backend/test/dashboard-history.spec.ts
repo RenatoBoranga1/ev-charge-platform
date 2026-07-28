@@ -5,13 +5,8 @@ import { ChargingHistorySort } from '../src/charging-history/dto/charging-histor
 import { HistoryCursorCodec } from '../src/charging-history/history-cursor';
 
 describe('Dashboard and history contracts', () => {
-  const invalidPeriods: Array<
-    [Parameters<typeof resolveDateRange>[0], string]
-  > = [
-    [
-      { from: '2026-07-01T00:00:00.000Z' },
-      'Informe from e to juntos.',
-    ],
+  const invalidPeriods: Array<[Parameters<typeof resolveDateRange>[0], string]> = [
+    [{ from: '2026-07-01T00:00:00.000Z' }, 'Informe from e to juntos.'],
     [
       {
         from: '2026-07-10T00:00:00.000Z',
@@ -34,14 +29,18 @@ describe('Dashboard and history contracts', () => {
       },
       'Timezone invalido.',
     ],
+    [
+      {
+        from: '2026-07-29T00:00:00.000Z',
+        to: '2026-07-30T00:00:00.000Z',
+      },
+      'O periodo nao pode estar no futuro.',
+    ],
   ];
   const now = new Date('2026-07-28T15:00:00.000Z');
 
   it('resolves the current month in the requested timezone', () => {
-    const period = resolveDateRange(
-      { timezone: 'America/Sao_Paulo' },
-      now,
-    );
+    const period = resolveDateRange({ timezone: 'America/Sao_Paulo' }, now);
     expect(period).toEqual({
       from: new Date('2026-07-01T03:00:00.000Z'),
       timezone: 'America/Sao_Paulo',
@@ -73,12 +72,10 @@ describe('Dashboard and history contracts', () => {
     expect(codec.decode(cursor, ChargingHistorySort.RECENT)).toMatchObject({
       sort: ChargingHistorySort.RECENT,
     });
-    expect(() =>
-      codec.decode(cursor, ChargingHistorySort.OLDEST),
-    ).toThrow(BadRequestException);
-    expect(() =>
-      codec.decode(`${cursor.slice(0, -1)}x`, ChargingHistorySort.RECENT),
-    ).toThrow(BadRequestException);
+    expect(() => codec.decode(cursor, ChargingHistorySort.OLDEST)).toThrow(BadRequestException);
+    expect(() => codec.decode(`${cursor.slice(0, -1)}x`, ChargingHistorySort.RECENT)).toThrow(
+      BadRequestException,
+    );
   });
 
   it('rejects malformed cursor payload values', () => {
@@ -88,8 +85,8 @@ describe('Dashboard and history contracts', () => {
       sort: ChargingHistorySort.ENERGY_ASC,
       value: 'not-a-number',
     });
-    expect(() =>
-      codec.decode(malformed, ChargingHistorySort.ENERGY_ASC),
-    ).toThrow(BadRequestException);
+    expect(() => codec.decode(malformed, ChargingHistorySort.ENERGY_ASC)).toThrow(
+      BadRequestException,
+    );
   });
 });
