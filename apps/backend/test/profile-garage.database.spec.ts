@@ -322,7 +322,7 @@ describeDatabase('Profile and smart garage database integration', () => {
         correlationId(),
       ),
     ).rejects.toMatchObject({
-      response: expect.objectContaining({ code: 'VEHICLE_DUPLICATE' }),
+      response: { code: 'VEHICLE_DUPLICATE' },
     });
 
     const attempts = await Promise.allSettled([
