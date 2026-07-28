@@ -4,6 +4,7 @@ import { Pressable, Text } from 'react-native';
 import { AuthProvider, getInitialRoute, useAuth } from '@/auth/AuthProvider';
 import { tokenStorage } from '@/auth/token-storage';
 import { api } from '@/api';
+import { mockProfile } from '@/mocks/data';
 
 jest.mock('@/api', () => ({
   api: {
@@ -20,15 +21,7 @@ jest.mock('@/auth/token-storage', () => ({
   },
 }));
 
-const profile = {
-  avoidedCo2Kg: 0,
-  chargingSessions: 0,
-  email: 'driver@example.com',
-  estimatedSavings: 0,
-  id: 'user-1',
-  name: 'Driver',
-  totalEnergyKwh: 0,
-};
+const profile = { ...mockProfile, email: 'driver@example.com' };
 
 function Harness() {
   const auth = useAuth();

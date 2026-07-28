@@ -64,7 +64,15 @@ O seed de demonstração só é executado quando `SEED_DEMO_DATA=true`. No Compo
 - `POST /v1/auth/login`
 - `POST /v1/auth/refresh`
 - `GET /v1/users/me`
+- `PATCH /v1/users/me`
+- `DELETE /v1/users/me`
 - `GET /v1/users/me/vehicles`
+- `POST /v1/users/me/vehicles`
+- `GET /v1/users/me/vehicles/:id`
+- `PATCH /v1/users/me/vehicles/:id`
+- `DELETE /v1/users/me/vehicles/:id`
+- `POST /v1/users/me/vehicles/:id/default`
+- `POST /v1/users/me/vehicles/:id/duplicate`
 - `GET /v1/stations/nearby`
 - `GET /v1/stations/:id`
 - `POST /v1/charging-sessions/validate-qr`
@@ -74,6 +82,11 @@ O seed de demonstração só é executado quando `SEED_DEMO_DATA=true`. No Compo
 - `POST /v1/charging-sessions/:id/start`
 - `POST /v1/charging-sessions/:id/stop`
 - `GET /v1/charging-sessions/:id/metrics`
+
+Perfil e garagem usam optimistic locking por `recordVersion`, soft delete,
+auditoria e Outbox. O PostgreSQL garante um único veículo principal ativo por
+usuário. Consulte `docs/architecture/adr-008-profile-and-smart-garage.md` e
+`docs/mobile/profile-and-garage.md`.
 
 O QR em JSON carrega a hierarquia completa. Deep links carregam somente `connectorId`; o backend resolve connector, EVSE, charge point e estação e rejeita hierarquias divergentes.
 

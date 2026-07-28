@@ -16,6 +16,19 @@ enum UserRole {
 enum VehicleType {
   BEV
   PHEV
+  HEV
+}
+
+enum VehicleStatus {
+  ACTIVE
+  INACTIVE
+  SOLD
+}
+
+enum ProfileTheme {
+  SYSTEM
+  LIGHT
+  DARK
 }
 
 enum StationStatus {
@@ -39,6 +52,7 @@ enum PlugType {
   CCS2
   TYPE_2
   CHADEMO
+  NACS
   GB_T
 }
 
@@ -129,7 +143,19 @@ model User {
   passwordHash     String               @map("password_hash")
   role             UserRole             @default(DRIVER)
   name             String
+  firstName        String?              @map("first_name")
+  lastName         String?              @map("last_name")
   phone            String?
+  avatarUrl        String?              @map("avatar_url")
+  city             String?
+  state            String?
+  country          String               @default("BR")
+  language         String               @default("pt-BR")
+  theme            ProfileTheme         @default(SYSTEM)
+  preferences      Json?
+  notificationPreferences Json?         @map("notification_preferences")
+  privacyPreferences Json?              @map("privacy_preferences")
+  accountDeletionRequestedAt DateTime?  @map("account_deletion_requested_at")
   totalEnergyKwh   Decimal              @default(0) @map("total_energy_kwh") @db.Decimal(12, 3)
   avoidedCo2Kg     Decimal              @default(0) @map("avoided_co2_kg") @db.Decimal(12, 3)
   estimatedSavings Decimal              @default(0) @map("estimated_savings") @db.Decimal(12, 2)
@@ -173,14 +199,22 @@ model Vehicle {
   user                            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   brand                           String
   model                           String
+  nickname                        String      @default("Meu veículo")
   trim                            String?
   year                            Int?
+  color                           String?
   licensePlate                    String?     @map("license_plate")
+  vin                             String?
   vehicleType                     VehicleType @map("vehicle_type")
   batteryCapacityKwh              Decimal     @map("battery_capacity_kwh") @db.Decimal(8, 2)
   estimatedRangeKm                Int?        @map("estimated_range_km")
   averageConsumptionKwhPer100Km   Decimal?    @map("average_consumption_kwh_per_100_km") @db.Decimal(8, 2)
+  maximumAcPowerKw                Decimal?    @map("maximum_ac_power_kw") @db.Decimal(8, 2)
+  maximumDcPowerKw                Decimal?    @map("maximum_dc_power_kw") @db.Decimal(8, 2)
   supportedPlugTypes              PlugType[]  @map("supported_plug_types")
+  status                          VehicleStatus @default(ACTIVE)
+  imageUrl                        String?     @map("image_url")
+  notes                           String?
   isDefault                       Boolean     @default(false) @map("is_default")
   chargingSessions                ChargingSession[]
   createdAt                       DateTime    @default(now()) @map("created_at")

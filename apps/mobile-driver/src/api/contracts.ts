@@ -10,12 +10,16 @@ import type {
   Reservation,
   RoutePlannerInput,
   LoginInput,
+  UpdateProfileInput,
   RegisterInput,
   RoutePlannerResult,
   Station,
   StationFilters,
   UserProfile,
   ValidatedConnector,
+  VehicleCreateInput,
+  VehicleListFilters,
+  VehicleUpdateInput,
   Vehicle,
 } from '@/types/domain';
 
@@ -27,6 +31,8 @@ export interface AuthApi {
 
 export interface UsersApi {
   getMe(): Promise<UserProfile>;
+  update(input: UpdateProfileInput): Promise<UserProfile>;
+  requestDeletion(recordVersion: number): Promise<UserProfile>;
 }
 
 export interface NearbyStationsOptions {
@@ -64,9 +70,13 @@ export interface ChargingApi {
 }
 
 export interface VehiclesApi {
-  list(): Promise<Vehicle[]>;
-  create(input: Omit<Vehicle, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Vehicle>;
-  update(vehicleId: string, input: Partial<Vehicle>): Promise<Vehicle>;
+  list(filters?: VehicleListFilters): Promise<Vehicle[]>;
+  getById(vehicleId: string): Promise<Vehicle>;
+  create(input: VehicleCreateInput): Promise<Vehicle>;
+  update(vehicleId: string, input: VehicleUpdateInput): Promise<Vehicle>;
+  setDefault(vehicleId: string, recordVersion: number): Promise<Vehicle>;
+  duplicate(vehicleId: string, recordVersion: number): Promise<Vehicle>;
+  remove(vehicleId: string, recordVersion: number): Promise<void>;
 }
 
 export interface PaymentsApi {

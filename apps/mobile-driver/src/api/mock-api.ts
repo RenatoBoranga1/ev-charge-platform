@@ -34,6 +34,10 @@ import type {
   Station,
   StationFilters,
   UserProfile,
+  UpdateProfileInput,
+  VehicleCreateInput,
+  VehicleListFilters,
+  VehicleUpdateInput,
   ValidatedConnector,
   Vehicle,
 } from '@/types/domain';
@@ -44,6 +48,7 @@ import {
 import { normalizeManualConnectorCode } from '@/utils/manual-code';
 import type { ChargeQrPayload } from '@/utils/qr-parser';
 import { filterStations } from '@/utils/station-filters';
+import { filterAndSortVehicles } from '@/garage/vehicle-catalog';
 
 const wait = async (milliseconds = 280): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -107,6 +112,65 @@ export class MockUsersApi implements UsersApi {
   async getMe(): Promise<UserProfile> {
     await wait();
     return mockIdentity.user;
+  }
+
+  async update(input: UpdateProfileInput): Promise<UserProfile> {
+    await wait();
+    const current = mockIdentity.user;
+    if (current.recordVersion !== input.recordVersion) {
+      throw new Error('O perfil foi alterado. Atualize e tente novamente.');
+    }
+    const firstName = input.firstName?.trim() ?? current.firstName;
+    const lastName = input.lastName?.trim() ?? current.lastName;
+    const user: UserProfile = {
+      ...current,
+      ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
+      ...(input.city !== undefined ? { city: input.city } : {}),
+      ...(input.country !== undefined ? { country: input.country } : {}),
+      ...(input.email !== undefined
+        ? { email: input.email.trim().toLowerCase() }
+        : {}),
+      firstName,
+      ...(input.language !== undefined ? { language: input.language } : {}),
+      lastName,
+      name: `${firstName} ${lastName}`.trim(),
+      notifications: {
+        ...current.notifications,
+        ...input.notifications,
+      },
+      ...(input.phone !== undefined ? { phone: input.phone } : {}),
+      preferences: {
+        ...current.preferences,
+        ...input.preferences,
+      },
+      privacy: {
+        ...current.privacy,
+        ...input.privacy,
+      },
+      recordVersion: current.recordVersion + 1,
+      ...(input.state !== undefined ? { state: input.state } : {}),
+      ...(input.theme !== undefined ? { theme: input.theme } : {}),
+    };
+    mockIdentity = {
+      ...mockIdentity,
+      email: user.email,
+      user,
+    };
+    return user;
+  }
+
+  async requestDeletion(recordVersion: number): Promise<UserProfile> {
+    await wait();
+    if (mockIdentity.user.recordVersion !== recordVersion) {
+      throw new Error('O perfil foi alterado. Atualize e tente novamente.');
+    }
+    const user: UserProfile = {
+      ...mockIdentity.user,
+      accountDeletionRequestedAt: new Date().toISOString(),
+      recordVersion: recordVersion + 1,
+    };
+    mockIdentity = { ...mockIdentity, user };
+    return user;
   }
 }
 
@@ -307,50 +371,147 @@ export class MockChargingApi implements ChargingApi {
 }
 
 export class MockVehiclesApi implements VehiclesApi {
-  async list(): Promise<Vehicle[]> {
+  async list(filters: VehicleListFilters = {}): Promise<Vehicle[]> {
     await wait();
-    return [...vehicleState];
+    return filterAndSortVehicles(vehicleState, filters);
   }
 
-  async create(
-    input: Omit<Vehicle, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
-  ): Promise<Vehicle> {
+  async getById(vehicleId: string): Promise<Vehicle> {
     await wait();
+    return this.requireVehicle(vehicleId);
+  }
+
+  async create(input: VehicleCreateInput): Promise<Vehicle> {
+    await wait();
+    this.assertNoDuplicate(input);
     const now = new Date().toISOString();
     const vehicle: Vehicle = {
       ...input,
       id: `vehicle-${Date.now()}`,
       userId: ids.user,
+      isDefault: input.isDefault || vehicleState.length === 0,
+      recordVersion: 1,
       createdAt: now,
       updatedAt: now,
     };
-    vehicleState = input.isDefault
+    vehicleState = vehicle.isDefault
       ? [...vehicleState.map((item) => ({ ...item, isDefault: false })), vehicle]
       : [...vehicleState, vehicle];
     return vehicle;
   }
 
-  async update(vehicleId: string, input: Partial<Vehicle>): Promise<Vehicle> {
+  async update(
+    vehicleId: string,
+    input: VehicleUpdateInput,
+  ): Promise<Vehicle> {
     await wait();
-    const current = vehicleState.find((item) => item.id === vehicleId);
-    if (!current) throw new Error('Veículo não encontrado.');
-
+    const current = this.requireVehicle(vehicleId);
+    if (current.recordVersion !== input.recordVersion) {
+      throw new Error('O veículo foi alterado. Atualize e tente novamente.');
+    }
+    if (current.isDefault && input.isDefault === false) {
+      throw new Error('Defina outro veículo como principal primeiro.');
+    }
+    this.assertNoDuplicate(input, vehicleId);
     const updated: Vehicle = {
       ...current,
       ...input,
       id: current.id,
+      recordVersion: current.recordVersion + 1,
       updatedAt: new Date().toISOString(),
     };
     vehicleState = vehicleState.map((item) => {
       if (input.isDefault && item.id !== vehicleId) {
-        return { ...item, isDefault: false };
+        return {
+          ...item,
+          isDefault: false,
+          recordVersion: item.recordVersion + 1,
+        };
       }
       return item.id === vehicleId ? updated : item;
     });
     return updated;
   }
-}
 
+  setDefault(vehicleId: string, recordVersion: number): Promise<Vehicle> {
+    return this.update(vehicleId, { isDefault: true, recordVersion });
+  }
+
+  async duplicate(
+    vehicleId: string,
+    recordVersion: number,
+  ): Promise<Vehicle> {
+    const current = await this.getById(vehicleId);
+    if (current.recordVersion !== recordVersion) {
+      throw new Error('O veículo foi alterado. Atualize e tente novamente.');
+    }
+    return this.create({
+      batteryCapacityKwh: current.batteryCapacityKwh,
+      brand: current.brand,
+      ...(current.estimatedRangeKm !== undefined
+        ? { estimatedRangeKm: current.estimatedRangeKm }
+        : {}),
+      isDefault: false,
+      model: current.model,
+      nickname: `${current.nickname} (cópia)`,
+      status: 'ACTIVE',
+      supportedPlugTypes: current.supportedPlugTypes,
+      vehicleType: current.vehicleType,
+      ...(current.year !== undefined ? { year: current.year } : {}),
+      ...(current.averageConsumptionKwhPer100Km !== undefined
+        ? { averageConsumptionKwhPer100Km: current.averageConsumptionKwhPer100Km }
+        : {}),
+      ...(current.color ? { color: current.color } : {}),
+      ...(current.imageUrl ? { imageUrl: current.imageUrl } : {}),
+      ...(current.maximumAcPowerKw !== undefined
+        ? { maximumAcPowerKw: current.maximumAcPowerKw }
+        : {}),
+      ...(current.maximumDcPowerKw !== undefined
+        ? { maximumDcPowerKw: current.maximumDcPowerKw }
+        : {}),
+      ...(current.notes ? { notes: current.notes } : {}),
+      ...(current.version ? { version: current.version } : {}),
+    });
+  }
+
+  async remove(vehicleId: string, recordVersion: number): Promise<void> {
+    await wait();
+    const current = this.requireVehicle(vehicleId);
+    if (current.recordVersion !== recordVersion) {
+      throw new Error('O veículo foi alterado. Atualize e tente novamente.');
+    }
+    vehicleState = vehicleState.filter((item) => item.id !== vehicleId);
+    if (current.isDefault && vehicleState[0]) {
+      vehicleState[0] = {
+        ...vehicleState[0],
+        isDefault: true,
+        recordVersion: vehicleState[0].recordVersion + 1,
+      };
+    }
+  }
+
+  private requireVehicle(vehicleId: string): Vehicle {
+    const vehicle = vehicleState.find((item) => item.id === vehicleId);
+    if (!vehicle) throw new Error('Veículo não encontrado.');
+    return vehicle;
+  }
+
+  private assertNoDuplicate(
+    input: Pick<VehicleCreateInput, 'licensePlate' | 'vin'>,
+    excludeId?: string,
+  ): void {
+    const licensePlate = input.licensePlate?.toUpperCase();
+    const vin = input.vin?.toUpperCase();
+    const duplicate = vehicleState.some(
+      (vehicle) =>
+        vehicle.id !== excludeId &&
+        ((licensePlate &&
+          vehicle.licensePlate?.toUpperCase() === licensePlate) ||
+          (vin && vehicle.vin?.toUpperCase() === vin)),
+    );
+    if (duplicate) throw new Error('Já existe um veículo com esta placa ou VIN.');
+  }
+}
 export class MockPaymentsApi implements PaymentsApi {
   async list(): Promise<PaymentMethod[]> {
     await wait();

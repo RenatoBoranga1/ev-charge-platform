@@ -1,4 +1,8 @@
-export type PlugType = 'CCS2' | 'TYPE_2' | 'CHADEMO' | 'GB_T';
+export type PlugType = 'CCS2' | 'TYPE_2' | 'CHADEMO' | 'NACS' | 'GB_T';
+export type VehicleType = 'BEV' | 'PHEV' | 'HEV';
+export type VehicleStatus = 'ACTIVE' | 'INACTIVE' | 'SOLD';
+export type ProfileTheme = 'SYSTEM' | 'LIGHT' | 'DARK';
+
 export type CurrentType = 'AC' | 'DC';
 export type StationStatus =
   | 'AVAILABLE'
@@ -63,19 +67,45 @@ export interface StationFilters {
 export interface Vehicle {
   id: string;
   userId: string;
+  nickname: string;
   brand: string;
   model: string;
   version?: string;
   year?: number;
+  color?: string;
   licensePlate?: string;
-  vehicleType: 'BEV' | 'PHEV';
+  vin?: string;
+  vehicleType: VehicleType;
   batteryCapacityKwh: number;
   estimatedRangeKm?: number;
   averageConsumptionKwhPer100Km?: number;
+  maximumAcPowerKw?: number;
+  maximumDcPowerKw?: number;
   supportedPlugTypes: PlugType[];
   isDefault: boolean;
+  status: VehicleStatus;
   createdAt: string;
+  imageUrl?: string;
+  notes?: string;
+  recordVersion: number;
   updatedAt: string;
+}
+
+export type VehicleCreateInput = Omit<
+  Vehicle,
+  'id' | 'userId' | 'recordVersion' | 'createdAt' | 'updatedAt'
+>;
+
+export type VehicleUpdateInput = Partial<VehicleCreateInput> & {
+  recordVersion: number;
+};
+
+export interface VehicleListFilters {
+  search?: string;
+  type?: VehicleType;
+  status?: VehicleStatus;
+  sortBy?: 'nickname' | 'brand' | 'createdAt' | 'year';
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface PaymentMethod {
@@ -149,11 +179,54 @@ export interface ChargingSessionRealtimeEvent {
 export interface UserProfile {
   id: string;
   name: string;
+  firstName: string;
+  lastName: string;
   email: string;
+  phone?: string;
+  avatarUrl?: string;
+  city?: string;
+  state?: string;
+  country: string;
+  language: string;
+  theme: ProfileTheme;
+  preferences: {
+    dataSaver: boolean;
+  };
+  notifications: {
+    chargingNotifications: boolean;
+    emailReceipts: boolean;
+    favoriteStationAlerts: boolean;
+    promotions: boolean;
+    reservationAlerts: boolean;
+  };
+  privacy: {
+    analyticsConsent: boolean;
+    marketingConsent: boolean;
+    personalizedOffers: boolean;
+  };
+  accountDeletionRequestedAt?: string;
+  recordVersion: number;
   totalEnergyKwh: number;
   avoidedCo2Kg: number;
   chargingSessions: number;
   estimatedSavings: number;
+}
+
+export interface UpdateProfileInput {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  avatarUrl?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  language?: string;
+  theme?: ProfileTheme;
+  preferences?: Partial<UserProfile['preferences']>;
+  notifications?: Partial<UserProfile['notifications']>;
+  privacy?: Partial<UserProfile['privacy']>;
+  recordVersion: number;
 }
 
 
