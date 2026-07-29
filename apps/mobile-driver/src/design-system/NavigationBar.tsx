@@ -18,18 +18,11 @@ interface NavigationBarProps {
   onSelect: (key: string) => void;
 }
 
-export function NavigationBar({
-  activeKey,
-  items,
-  onSelect,
-}: NavigationBarProps) {
+export function NavigationBar({ activeKey, items, onSelect }: NavigationBarProps) {
   const { colors, sizes, typeScale } = useAppTheme();
 
   return (
-    <SafeAreaView
-      edges={['bottom']}
-      style={{ backgroundColor: colors.surfaceContainer }}
-    >
+    <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.surface }}>
       <View style={[styles.bar, { minHeight: sizes.navigationBarHeight }]}>
         {items.map((item) => {
           const selected = item.key === activeKey;
@@ -43,23 +36,15 @@ export function NavigationBar({
               style={styles.item}
             >
               <View
-                style={[
-                  styles.indicator,
-                  selected && { backgroundColor: colors.primaryContainer },
-                ]}
+                style={[styles.indicator, selected && { backgroundColor: colors.primaryContainer }]}
               >
                 <Ionicons
-                  name={selected ? item.selectedIcon ?? item.icon : item.icon}
+                  name={selected ? (item.selectedIcon ?? item.icon) : item.icon}
                   color={color}
                   size={24}
                 />
                 {item.badge ? (
-                  <View
-                    style={[
-                      styles.badge,
-                      { backgroundColor: colors.danger },
-                    ]}
-                  >
+                  <View style={[styles.badge, { backgroundColor: colors.danger }]}>
                     <Text style={[styles.badgeText, { color: colors.onPrimary }]}>
                       {item.badge}
                     </Text>
@@ -77,6 +62,8 @@ export function NavigationBar({
 
 const styles = StyleSheet.create({
   bar: {
+    borderTopWidth: 1,
+    paddingTop: 4,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
@@ -93,7 +80,7 @@ const styles = StyleSheet.create({
   indicator: {
     minWidth: 56,
     height: 32,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },

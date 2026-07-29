@@ -1,16 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import {
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-  type TextInputProps,
-} from 'react-native';
+import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { useAppTheme } from '@/theme/ThemeProvider';
 
-interface SearchBarProps
-  extends Omit<TextInputProps, 'onChangeText' | 'value'> {
+interface SearchBarProps extends Omit<TextInputProps, 'onChangeText' | 'value'> {
   onChangeText: (value: string) => void;
   onClear?: () => void;
   value: string;
@@ -30,8 +23,9 @@ export function SearchBar({
       style={[
         styles.container,
         {
-          backgroundColor: colors.surfaceContainerHigh,
-          borderRadius: radii.pill,
+          backgroundColor: colors.surface,
+          borderColor: colors.outlineVariant,
+          borderRadius: radii.lg,
         },
       ]}
     >
@@ -66,6 +60,7 @@ export function SearchBar({
 
 const styles = StyleSheet.create({
   container: {
+    borderWidth: 1,
     minHeight: 52,
     paddingHorizontal: 16,
     flexDirection: 'row',
