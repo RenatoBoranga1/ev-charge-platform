@@ -1,5 +1,5 @@
 import { Redirect } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/Screen';
 import { isDevelopmentCatalogEnabled } from '@/config/runtime';
@@ -58,10 +58,13 @@ export default function BrandCatalogScreen() {
       <Card variant="outlined">
         <BrandMark />
         <Text style={[typeScale.bodyMedium, { color: colors.textMuted }]}>
-          Marca textual provisória. Logos, símbolo, splash e ícones oficiais ainda não foram
-          fornecidos.
+          Ativos oficiais entregues em PNG com origem e SHA-256 registrados. A paleta abaixo foi
+          extraída do símbolo mestre e ainda depende de aprovação por manual de marca.
         </Text>
-        <Tag label="Ativos oficiais pendentes" tone="warning" />
+        <View style={styles.readiness}>
+          <Tag label="Ativos oficiais disponíveis" tone="success" />
+          <Tag label="Paleta extraída, não homologada" tone="warning" />
+        </View>
       </Card>
 
       <Text accessibilityRole="header" style={[typeScale.titleLarge, { color: colors.text }]}>
@@ -92,14 +95,34 @@ export default function BrandCatalogScreen() {
             key={name}
             style={[styles.assetRow, { borderBottomColor: colors.outlineVariant }]}
           >
+            {isAvailableBrandAsset(asset) && asset.source !== null ? (
+              <Image
+                accessibilityIgnoresInvertColors
+                accessible={false}
+                resizeMode="contain"
+                source={asset.source}
+                style={[styles.assetPreview, { backgroundColor: colors.surfaceContainer }]}
+              />
+            ) : null}
             <View style={styles.copy}>
               <Text style={[typeScale.labelLarge, { color: colors.text }]}>{name}</Text>
               <Text style={[typeScale.bodySmall, { color: colors.textMuted }]}>
                 {asset.targets.join(' · ')} · {asset.required ? 'obrigatório' : 'opcional'}
               </Text>
+              {asset.sourceFile ? (
+                <Text numberOfLines={1} style={[typeScale.bodySmall, { color: colors.textMuted }]}>
+                  {asset.sourceFile}
+                </Text>
+              ) : null}
             </View>
             <Tag
-              label={isAvailableBrandAsset(asset) ? 'Disponível' : 'Ausente'}
+              label={
+                asset.status === 'official'
+                  ? 'Oficial'
+                  : asset.status === 'derived-from-official'
+                    ? 'Derivado'
+                    : 'Ausente'
+              }
               tone={isAvailableBrandAsset(asset) ? 'success' : 'warning'}
             />
           </View>
@@ -151,6 +174,7 @@ const styles = StyleSheet.create({
     gap: 12,
     minHeight: 58,
   },
+  assetPreview: { borderRadius: 10, height: 52, width: 72 },
   content: { gap: 18 },
   copy: { flex: 1 },
   readiness: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },

@@ -29,7 +29,8 @@ export interface BrandConfig {
   };
   palette: {
     approved: boolean;
-    source: 'official-assets' | 'design-system-fallback';
+    source: 'official-assets' | 'extracted-from-official-assets' | 'design-system-fallback';
+    extractionFile?: string;
   };
   support: {
     email?: string;
@@ -49,7 +50,10 @@ const supportedTargets = new Set<BrandAssetTarget>([
   'store',
 ]);
 
-function isValidImageSource(source: unknown): source is ImageSourcePropType {
+function isValidImageSource(source: unknown): boolean {
+  if (typeof source === 'string') {
+    return source.trim().length > 0;
+  }
   if (typeof source === 'number') {
     return Number.isInteger(source) && source > 0;
   }
@@ -60,7 +64,15 @@ function isValidImageSource(source: unknown): source is ImageSourcePropType {
     return false;
   }
   const uri = Reflect.get(source, 'uri');
-  return typeof uri === 'string' && uri.trim().length > 0;
+  if (typeof uri === 'string' && uri.trim().length > 0) {
+    return true;
+  }
+  const testUri = Reflect.get(source, 'testUri');
+  if (typeof testUri === 'string' && testUri.trim().length > 0) {
+    return true;
+  }
+  const defaultSource = Reflect.get(source, 'default');
+  return defaultSource !== undefined && isValidImageSource(defaultSource);
 }
 
 export function isValidBrandAsset(asset: BrandAsset): boolean {

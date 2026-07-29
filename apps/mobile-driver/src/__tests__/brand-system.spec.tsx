@@ -37,8 +37,20 @@ function brandWithAssets(assets: BrandConfig['assets']): BrandConfig {
   return { ...solarSolucoesBrand, assets };
 }
 
-function transformBrandAssets(transform: (asset: BrandAsset) => BrandAsset): BrandConfig['assets'] {
-  const assets = solarSolucoesBrand.assets;
+function missingAsset(asset: BrandAsset): BrandAsset {
+  return {
+    accessibilityLabel: asset.accessibilityLabel,
+    required: asset.required,
+    source: null,
+    status: 'missing',
+    targets: asset.targets,
+  };
+}
+
+function transformBrandAssets(
+  transform: (asset: BrandAsset) => BrandAsset,
+  assets = solarSolucoesBrand.assets,
+): BrandConfig['assets'] {
   return {
     logoLight: transform(assets.logoLight),
     logoDark: transform(assets.logoDark),
@@ -57,24 +69,31 @@ describe('Solar Soluções brand system', () => {
     });
   });
 
-  it('separates company and product while flagging missing official assets', () => {
+  it('separates company and product while exposing the delivered official assets', () => {
     expect(solarSolucoesBrand).toMatchObject({
       companyName: 'Solar Soluções',
       productName: 'Solis',
       palette: {
         approved: false,
-        source: 'design-system-fallback',
+        extractionFile: 'docs/brand/palette-extraction.json',
+        source: 'extracted-from-official-assets',
       },
     });
-    expect(hasOfficialBrandAssets(solarSolucoesBrand)).toBe(false);
+    expect(hasOfficialBrandAssets(solarSolucoesBrand)).toBe(true);
+    expect(hasRequiredMobileBrandAssets(solarSolucoesBrand)).toBe(true);
+    expect(hasRequiredWebBrandAssets(solarSolucoesBrand)).toBe(true);
+    expect(hasCompleteBrandAssetSet(solarSolucoesBrand)).toBe(true);
     expect(
       Object.values(solarSolucoesBrand.assets).every(
-        (asset) => asset.status === 'missing' && asset.source === null,
+        (asset) =>
+          asset.status === 'official' &&
+          asset.source !== null &&
+          asset.sourceFile?.startsWith('apps/mobile-driver/assets/brand/'),
       ),
     ).toBe(true);
   });
 
-  it('renders accessible textual fallbacks and the branded hero', () => {
+  it('renders accessible official marks and the branded hero', () => {
     const screen = render(
       <Providers>
         <BrandMark />
@@ -107,20 +126,25 @@ describe('Solar Soluções brand system', () => {
   });
   it('validates mobile and web requirements independently', () => {
     const mobileTargets = new Set(['mobile-runtime', 'android', 'ios']);
+    const missingAssets = transformBrandAssets(missingAsset);
+    const missing = brandWithAssets(missingAssets);
     const mobileOnly = brandWithAssets(
-      transformBrandAssets((asset) =>
-        asset.targets.some((target) => mobileTargets.has(target)) ? availableAsset(asset) : asset,
+      transformBrandAssets(
+        (asset) =>
+          asset.targets.some((target) => mobileTargets.has(target)) ? availableAsset(asset) : asset,
+        missingAssets,
       ),
     );
     const webOnly = brandWithAssets(
-      transformBrandAssets((asset) =>
-        asset.targets.includes('web') ? availableAsset(asset) : asset,
+      transformBrandAssets(
+        (asset) => (asset.targets.includes('web') ? availableAsset(asset) : asset),
+        missingAssets,
       ),
     );
 
-    expect(hasRequiredMobileBrandAssets(solarSolucoesBrand)).toBe(false);
-    expect(hasRequiredWebBrandAssets(solarSolucoesBrand)).toBe(false);
-    expect(hasCompleteBrandAssetSet(solarSolucoesBrand)).toBe(false);
+    expect(hasRequiredMobileBrandAssets(missing)).toBe(false);
+    expect(hasRequiredWebBrandAssets(missing)).toBe(false);
+    expect(hasCompleteBrandAssetSet(missing)).toBe(false);
     expect(hasRequiredMobileBrandAssets(mobileOnly)).toBe(true);
     expect(hasRequiredWebBrandAssets(mobileOnly)).toBe(false);
     expect(hasRequiredWebBrandAssets(webOnly)).toBe(true);
@@ -144,7 +168,7 @@ describe('Solar Soluções brand system', () => {
   it('rejects required omissions, empty origins and invalid image sources', () => {
     const requiredMissing = brandWithAssets({
       ...transformBrandAssets(availableAsset),
-      splash: solarSolucoesBrand.assets.splash,
+      splash: missingAsset(solarSolucoesBrand.assets.splash),
     });
     const emptyOrigin = {
       ...availableAsset(solarSolucoesBrand.assets.logoLight),

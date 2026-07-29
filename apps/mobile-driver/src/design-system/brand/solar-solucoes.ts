@@ -1,16 +1,29 @@
-import type { BrandAsset, BrandAssetTarget, BrandConfig } from './brand-config';
+import type { ImageSourcePropType } from 'react-native';
 
-const missingAsset = (
+import type { BrandAsset, BrandAssetStatus, BrandAssetTarget, BrandConfig } from './brand-config';
+
+const officialAsset = (
   accessibilityLabel: string,
+  source: ImageSourcePropType,
+  sourceFile: string,
   targets: BrandAssetTarget[],
+  status: BrandAssetStatus = 'official',
   required = true,
 ): BrandAsset => ({
   accessibilityLabel,
-  source: null,
-  status: 'missing',
+  source,
+  sourceFile,
+  status,
   targets,
   required,
 });
+
+const sources = {
+  logoLight: require('../../../assets/brand/solis-logo-light.png') as ImageSourcePropType,
+  logoDark: require('../../../assets/brand/solis-logo-dark.png') as ImageSourcePropType,
+  symbol: require('../../../assets/brand/solis-symbol.png') as ImageSourcePropType,
+  splash: require('../../../assets/brand/solis-splash-icon.png') as ImageSourcePropType,
+};
 
 export const solarSolucoesBrand: BrandConfig = {
   id: 'solar-solucoes',
@@ -20,19 +33,47 @@ export const solarSolucoesBrand: BrandConfig = {
   tagline: 'Energia que move o futuro.',
   description: 'Plataforma inteligente de recarga de veículos elétricos.',
   assets: {
-    logoLight: missingAsset('Logo claro oficial da Solis pendente', ['mobile-runtime', 'web']),
-    logoDark: missingAsset('Logo escuro oficial da Solis pendente', ['mobile-runtime', 'web']),
-    symbol: missingAsset('Símbolo oficial da Solis pendente', ['mobile-runtime', 'web', 'store']),
-    adaptiveIconForeground: missingAsset('Ícone adaptativo oficial da Solis pendente', [
-      'android',
-      'store',
-    ]),
-    splash: missingAsset('Splash oficial da Solis pendente', ['mobile-runtime', 'android', 'ios']),
-    favicon: missingAsset('Favicon oficial da Solis pendente', ['web']),
+    logoLight: officialAsset(
+      'Solis, Solar Soluções',
+      sources.logoLight,
+      'apps/mobile-driver/assets/brand/solis-logo-light.png',
+      ['mobile-runtime', 'web'],
+    ),
+    logoDark: officialAsset(
+      'Solis, Solar Soluções',
+      sources.logoDark,
+      'apps/mobile-driver/assets/brand/solis-logo-dark.png',
+      ['mobile-runtime', 'web'],
+    ),
+    symbol: officialAsset(
+      'Símbolo Solis',
+      sources.symbol,
+      'apps/mobile-driver/assets/brand/solis-symbol.png',
+      ['mobile-runtime', 'web', 'store'],
+    ),
+    adaptiveIconForeground: officialAsset(
+      'Símbolo Solis para ícone adaptativo',
+      sources.symbol,
+      'apps/mobile-driver/assets/brand/solis-symbol.png',
+      ['android', 'store'],
+    ),
+    splash: officialAsset(
+      'Símbolo Solis para tela de abertura',
+      sources.splash,
+      'apps/mobile-driver/assets/brand/solis-splash-icon.png',
+      ['mobile-runtime', 'android', 'ios'],
+    ),
+    favicon: officialAsset(
+      'Símbolo Solis para favicon',
+      sources.symbol,
+      'apps/mobile-driver/assets/brand/solis-symbol.png',
+      ['web'],
+    ),
   },
   palette: {
     approved: false,
-    source: 'design-system-fallback',
+    source: 'extracted-from-official-assets',
+    extractionFile: 'docs/brand/palette-extraction.json',
   },
   support: {},
 };
