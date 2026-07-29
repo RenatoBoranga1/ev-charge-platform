@@ -2,10 +2,17 @@ import { render } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
 
 import {
+  type BrandAsset,
+  type BrandConfig,
   BrandHero,
   BrandMark,
   contrastRatio,
+  hasCompleteBrandAssetSet,
   hasOfficialBrandAssets,
+  hasRequiredMobileBrandAssets,
+  hasRequiredWebBrandAssets,
+  isAvailableBrandAsset,
+  isValidBrandAsset,
   meetsWcagAA,
   solarSolucoesBrand,
 } from '@/design-system';
@@ -15,6 +22,31 @@ import { ThemeProvider } from '@/theme/ThemeProvider';
 
 function Providers({ children }: PropsWithChildren) {
   return <ThemeProvider>{children}</ThemeProvider>;
+}
+
+function availableAsset(asset: BrandAsset, status: BrandAsset['status'] = 'official'): BrandAsset {
+  return {
+    ...asset,
+    source: { uri: 'file:///official/solis.svg' },
+    sourceFile: 'assets/brand/solis/solis-master.svg',
+    status,
+  };
+}
+
+function brandWithAssets(assets: BrandConfig['assets']): BrandConfig {
+  return { ...solarSolucoesBrand, assets };
+}
+
+function transformBrandAssets(transform: (asset: BrandAsset) => BrandAsset): BrandConfig['assets'] {
+  const assets = solarSolucoesBrand.assets;
+  return {
+    logoLight: transform(assets.logoLight),
+    logoDark: transform(assets.logoDark),
+    symbol: transform(assets.symbol),
+    adaptiveIconForeground: transform(assets.adaptiveIconForeground),
+    splash: transform(assets.splash),
+    favicon: transform(assets.favicon),
+  };
 }
 
 describe('Solar Soluções brand system', () => {
@@ -72,5 +104,61 @@ describe('Solar Soluções brand system', () => {
     expect(typeScale.numericLarge.fontWeight).toBe('800');
     expect(motion.durationFast).toBeLessThan(motion.durationSlow);
     expect(opacity.disabled).toBeLessThan(opacity.pressed);
+  });
+  it('validates mobile and web requirements independently', () => {
+    const mobileTargets = new Set(['mobile-runtime', 'android', 'ios']);
+    const mobileOnly = brandWithAssets(
+      transformBrandAssets((asset) =>
+        asset.targets.some((target) => mobileTargets.has(target)) ? availableAsset(asset) : asset,
+      ),
+    );
+    const webOnly = brandWithAssets(
+      transformBrandAssets((asset) =>
+        asset.targets.includes('web') ? availableAsset(asset) : asset,
+      ),
+    );
+
+    expect(hasRequiredMobileBrandAssets(solarSolucoesBrand)).toBe(false);
+    expect(hasRequiredWebBrandAssets(solarSolucoesBrand)).toBe(false);
+    expect(hasCompleteBrandAssetSet(solarSolucoesBrand)).toBe(false);
+    expect(hasRequiredMobileBrandAssets(mobileOnly)).toBe(true);
+    expect(hasRequiredWebBrandAssets(mobileOnly)).toBe(false);
+    expect(hasRequiredWebBrandAssets(webOnly)).toBe(true);
+    expect(hasRequiredMobileBrandAssets(webOnly)).toBe(false);
+  });
+
+  it('accepts complete sets and assets derived from an official master', () => {
+    const completeAssets = transformBrandAssets(availableAsset);
+    const complete = brandWithAssets(completeAssets);
+    const derived = brandWithAssets({
+      ...completeAssets,
+      symbol: availableAsset(solarSolucoesBrand.assets.symbol, 'derived-from-official'),
+    });
+
+    expect(hasOfficialBrandAssets(complete)).toBe(true);
+    expect(hasCompleteBrandAssetSet(complete)).toBe(true);
+    expect(hasCompleteBrandAssetSet(derived)).toBe(true);
+    expect(isAvailableBrandAsset(derived.assets.symbol)).toBe(true);
+  });
+
+  it('rejects required omissions, empty origins and invalid image sources', () => {
+    const requiredMissing = brandWithAssets({
+      ...transformBrandAssets(availableAsset),
+      splash: solarSolucoesBrand.assets.splash,
+    });
+    const emptyOrigin = {
+      ...availableAsset(solarSolucoesBrand.assets.logoLight),
+      sourceFile: ' ',
+    };
+    const invalidSource = {
+      ...availableAsset(solarSolucoesBrand.assets.logoDark),
+      source: { uri: '' },
+    };
+
+    expect(hasRequiredMobileBrandAssets(requiredMissing)).toBe(false);
+    expect(hasCompleteBrandAssetSet(requiredMissing)).toBe(false);
+    expect(isValidBrandAsset(emptyOrigin)).toBe(false);
+    expect(isValidBrandAsset(invalidSource)).toBe(false);
+    expect(isAvailableBrandAsset(invalidSource)).toBe(false);
   });
 });
