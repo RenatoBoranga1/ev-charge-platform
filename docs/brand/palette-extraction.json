@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-29",
+  "source": {
+    "file": "apps/mobile-driver/assets/brand/solis-symbol.png",
+    "sha256": "215a78367fab35160865d2f07d91f1fe6c078faa418bd8a55f725516c097d439",
+    "width": 1536,
+    "height": 1024
+  },
+  "method": {
+    "alphaThreshold": 240,
+    "quantizationStep": 16,
+    "description": "Pixels with alpha >= 240 grouped into 16-value RGB bins."
+  },
+  "dominantBins": [
+    { "hex": "#082868", "pixels": 44199 },
+    { "hex": "#F8F8F8", "pixels": 15442 },
+    { "hex": "#F88808", "pixels": 9321 },
+    { "hex": "#F89808", "pixels": 9249 },
+    { "hex": "#F87808", "pixels": 7911 },
+    { "hex": "#F8A808", "pixels": 7124 },
+    { "hex": "#082858", "pixels": 6976 },
+    { "hex": "#F8B808", "pixels": 6405 },
+    { "hex": "#F8D808", "pixels": 5275 },
+    { "hex": "#083878", "pixels": 5236 },
+    { "hex": "#68B828", "pixels": 2934 },
+    { "hex": "#0858B8", "pixels": 2704 },
+    { "hex": "#0878C8", "pixels": 2339 }
+  ],
+  "semanticSelection": {
+    "brandNavy": "#082868",
+    "brandNavyDark": "#081858",
+    "electricBlue": "#0878C8",
+    "solarOrange": "#F88808",
+    "solarYellow": "#F8D808",
+    "sustainabilityGreen": "#68B828",
+    "brandWhite": "#F8F8F8"
+  },
+  "approval": {
+    "status": "extracted-not-homologated",
+    "reason": "No official brand manual with authoritative color codes was supplied."
+  }
+}

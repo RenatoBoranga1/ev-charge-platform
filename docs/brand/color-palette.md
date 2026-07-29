@@ -1,33 +1,39 @@
-# Paleta de interface provisória
+# Paleta extraída dos ativos oficiais
 
-Esta não é a paleta oficial da Solar Soluções. São tokens preexistentes do
-Design System, mantidos como fallback até a entrega de um logo aprovado.
+As cores foram medidas em `solis-symbol.png`, identificado pelo SHA-256
+`215a78367fab35160865d2f07d91f1fe6c078faa418bd8a55f725516c097d439`.
+O resultado reproduzível está em `docs/brand/palette-extraction.json`.
 
-| Papel            | Claro     | Escuro    | Uso                |
-| ---------------- | --------- | --------- | ------------------ |
-| Ação primária    | `#08785B` | `#2DD4A2` | ações e foco       |
-| Acento solar     | `#B7F34A` | `#D9FF8A` | destaque discreto  |
-| Sustentabilidade | `#08785B` | `#6EE7BE` | contexto ambiental |
-| Disponível       | `#08785B` | `#6EE7BE` | estação disponível |
-| Ocupado          | `#9A5B00` | `#FBC36A` | estação ocupada    |
-| Offline          | `#596170` | `#A8B2C3` | estação offline    |
-| Falha            | `#B42318` | `#FFB4AB` | falha de estação   |
+## Método
 
-Status sempre inclui texto ou ícone, nunca somente cor. Texto branco sobre a
-ação primária clara e as combinações principais de superfícies são verificadas
-por teste WCAG AA.
+- considerar pixels com alfa maior ou igual a 240;
+- agrupar RGB em intervalos de 16 valores;
+- registrar frequência dos grupos;
+- selecionar papéis semânticos;
+- gerar tons auxiliares apenas para contraste e estados de interação.
 
-Gradientes oficiais não foram definidos. Após receber os ativos, as cores
-deverão ser extraídas por ferramenta, registradas em HEX/RGB e novamente
-validadas por contraste.
+## Cores representativas
 
-## Aplicação operacional provisória
+| Papel                  | HEX       | RGB           | Origem                   |
+| ---------------------- | --------- | ------------- | ------------------------ |
+| Azul-marinho           | `#082868` | 8, 40, 104    | bin dominante            |
+| Azul-marinho escuro    | `#081858` | 8, 24, 88     | região escura do símbolo |
+| Azul elétrico          | `#0878C8` | 8, 120, 200   | faixa azul               |
+| Laranja solar          | `#F88808` | 248, 136, 8   | sol                      |
+| Amarelo solar          | `#F8D808` | 248, 216, 8   | raios e brilho           |
+| Verde sustentabilidade | `#68B828` | 104, 184, 40  | detalhe verde            |
+| Branco da marca        | `#F8F8F8` | 248, 248, 248 | plugue e aro             |
 
-Mapa e badges usam os papéis `stationAvailable`, `stationBusy`,
-`stationOffline` e `stationFaulted`, sem depender somente da cor. Gráficos de
-potência usam `chartPrimary`, `chartSecondary`, `chartGrid` e `chartAxis`, com
-resumo textual acessível.
+## Estado de aprovação
 
-Nenhum `palette-extraction.json` foi gerado: sem ativo mestre oficial, qualquer
-frequência, HEX, RGB ou seleção semântica seria fabricada. Por isso
-`palette.approved` permanece `false`, a origem permanece
+Os valores são derivados objetivamente de um ativo oficial, mas não substituem
+um manual de marca. Por isso `palette.source` é
+`extracted-from-official-assets` e `palette.approved` permanece `false`.
+
+O tema Solis passa a usar azul-marinho como ação primária, laranja/amarelo como
+acento solar e verde no contexto de sustentabilidade. Status operacionais
+continuam semânticos e nunca dependem somente de cor. Combinações críticas
+permanecem cobertas pelos testes WCAG AA.
+
+Gradientes não foram promovidos a tokens oficiais. Apesar de existirem na arte,
+faltam ângulos, stops e regras de aplicação aprovados.

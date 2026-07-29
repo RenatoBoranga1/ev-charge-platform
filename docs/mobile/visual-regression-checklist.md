@@ -1,31 +1,37 @@
 # Checklist de regressão visual
 
+## Automatizado nesta entrega
+
+- [x] assets oficiais resolvidos pelo Metro;
+- [x] gates mobile, web e conjunto completo;
+- [x] ícone, adaptive foreground, monochrome, splash e favicon no Expo config;
+- [x] logo clara/escura e fallback acessível;
+- [x] contraste das combinações críticas;
+- [x] mapa, detalhes da estação, recarga, histórico, perfil e garagem;
+- [x] lint, typecheck, testes, build, Docker e E2Es.
+
+## Validação visual manual
+
 Validar em tema claro, escuro e sistema:
 
-- login, cadastro e recuperação;
-- dashboard com dados, vazio, loading e erro;
-- mapa claro/escuro, clusters e todos os status;
-- detalhe da estação e conectores;
-- scanner, confirmação, recarga ativa, conclusão e erro;
-- histórico, filtros, detalhe, timeline e gráfico;
-- perfil, configurações, garagem e formulários;
-- tab bar, headers, deep links e retorno;
-- fonte padrão e ampliada;
-- teclado, safe areas e textos longos;
-- contraste, foco, TalkBack e redução de movimento;
-- smartphones pequenos e grandes.
+- [ ] login, cadastro, recuperação e dashboard;
+- [ ] mapa, clusters, pins e detalhes da estação;
+- [ ] scanner, confirmação, recarga ativa, conclusão e erro;
+- [ ] histórico, timeline, perfil, configurações e garagem;
+- [ ] fonte padrão/ampliada, teclado, safe areas e textos longos;
+- [ ] smartphones pequenos e grandes;
+- [ ] redução de movimento e TalkBack.
 
-Antes de homologar a marca, incluir ainda splash, adaptive icon e logo oficiais
-em APK de desenvolvimento e release, dispositivo físico e tema claro/escuro.
+## Homologação nativa
 
-## Estado deste conjunto
+- [ ] gerar APK de desenvolvimento e release;
+- [ ] verificar ícone Android em máscaras circular, squircle e quadrada;
+- [ ] verificar ícone monocromático/temático;
+- [ ] verificar ícone iOS e App Store;
+- [ ] verificar splash em diferentes densidades e proporções;
+- [ ] verificar favicon em navegadores;
+- [ ] validar Google Maps com chave restrita por package e SHA-1/SHA-256;
+- [ ] validar localização e abertura do Google Maps em dispositivo físico.
 
-Cobertura automatizada verifica gates de ativos, fallbacks, contraste, pins,
-cards de estação, fluxo de recarga, reconexão, gráfico textual e histórico.
-Lint, typecheck, testes, bundle e E2E devem ser repetidos após todas as
-alterações.
-
-Continuam manuais e bloqueados por ambiente/insumos: comparação com o pacote
-oficial, adaptive icon, splash, favicon, paleta extraída, APK de
-desenvolvimento/release, TalkBack, fonte ampliada, redução de movimento,
-emulador e dispositivo físico. Nenhum desses itens pode ser marcado como
+Ativos integrados não equivalem a homologação nativa. O PR permanece draft
+enquanto estes itens e a aprovação formal da paleta estiverem pendentes.
