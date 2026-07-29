@@ -9,6 +9,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { AppButton } from '@/components/AppButton';
 import { AppHeader } from '@/components/AppHeader';
 import { AppTextField } from '@/components/AppTextField';
+import { BrandHero } from '@/design-system';
 import { Screen } from '@/components/Screen';
 
 const schema = z.object({
@@ -37,11 +38,7 @@ export default function RegisterScreen() {
       await register(values);
       router.replace('/');
     } catch (error) {
-      setSubmitError(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível criar sua conta.',
-      );
+      setSubmitError(error instanceof Error ? error.message : 'Não foi possível criar sua conta.');
     }
   });
 
@@ -51,6 +48,12 @@ export default function RegisterScreen() {
         canGoBack
         title="Criar conta"
         subtitle="Seus dados serão tratados conforme a LGPD."
+      />
+      <BrandHero
+        compact
+        eyebrow="Cadastro seguro"
+        title="Sua jornada elétrica começa aqui"
+        description="Crie seu acesso Solis sem perder o controle sobre seus dados."
       />
       <Controller
         control={control}

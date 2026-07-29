@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import { memo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -69,6 +70,9 @@ export const ChargingHistoryItem = memo(function ChargingHistoryItem({
       style={styles.historyCard}
     >
       <View style={styles.row}>
+        <View style={[styles.historyIcon, { backgroundColor: colors.primaryContainer }]}>
+          <Ionicons name="flash-outline" color={colors.primary} size={22} />
+        </View>
         <View style={styles.flex}>
           <Text style={[styles.station, { color: colors.text }]}>{item.station.name}</Text>
           <Text style={{ color: colors.textMuted }}>
@@ -78,9 +82,17 @@ export const ChargingHistoryItem = memo(function ChargingHistoryItem({
         <Tag label={statusLabels[item.status]} tone={statusTone(item.status)} />
       </View>
       <View style={styles.metrics}>
-        <Text style={{ color: colors.text }}>{item.energyKwh.toFixed(2)} kWh</Text>
-        <Text style={{ color: colors.text }}>{formatDuration(item.durationSeconds)}</Text>
-        {cost ? <Text style={{ color: colors.text }}>{cost}</Text> : null}
+        <HistoryMetric
+          icon="flash-outline"
+          label="Energia"
+          value={`${item.energyKwh.toFixed(2)} kWh`}
+        />
+        <HistoryMetric
+          icon="time-outline"
+          label="Duração"
+          value={formatDuration(item.durationSeconds)}
+        />
+        {cost ? <HistoryMetric icon="receipt-outline" label="Custo" value={cost} /> : null}
       </View>
       <Text style={{ color: colors.textMuted }}>
         {item.vehicle.nickname} · {item.connector.label}
@@ -93,6 +105,24 @@ export const ChargingHistoryItem = memo(function ChargingHistoryItem({
     </AppCard>
   );
 });
+
+function HistoryMetric({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <View accessibilityLabel={`${label}: ${value}`} style={styles.historyMetric}>
+      <Ionicons name={icon} color={colors.primary} size={15} />
+      <Text style={[styles.historyMetricText, { color: colors.text }]}>{value}</Text>
+    </View>
+  );
+}
 
 export function HistoryPeriodFilter({
   onChange,
@@ -367,7 +397,7 @@ export function ChargingSessionTimeline({ data }: { data: ChargingSessionTimelin
     <View accessibilityLabel="Linha do tempo da sessão" style={styles.timeline}>
       {data.events.map((event, index) => (
         <View key={`${event.type}-${event.occurredAt}`} style={styles.timelineRow}>
-          <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+          <View style={[styles.dot, { backgroundColor: colors.chartSecondary }]} />
           <View style={styles.flex}>
             <Text style={[styles.timelineTitle, { color: colors.text }]}>
               {timelineLabels[event.type]}
@@ -375,7 +405,7 @@ export function ChargingSessionTimeline({ data }: { data: ChargingSessionTimelin
             <Text style={{ color: colors.textMuted }}>{formatDateTime(event.occurredAt)}</Text>
           </View>
           {index < data.events.length - 1 ? (
-            <View style={[styles.line, { backgroundColor: colors.border }]} />
+            <View style={[styles.line, { backgroundColor: colors.chartGrid }]} />
           ) : null}
         </View>
       ))}
@@ -397,24 +427,36 @@ export function ChargingSessionEnergyChart({ data }: { data: ChargingSessionMetr
     data.summary.maximumPowerKw ?? 0
   } quilowatts e potência média ${data.summary.averagePowerKw ?? 0} quilowatts.`;
   return (
-    <View
-      accessibilityLabel={description}
-      accessibilityRole="image"
-      accessible
-      style={styles.chart}
-    >
-      {data.points.map((point) => (
-        <View
-          key={point.sampledAt}
-          style={[
-            styles.bar,
-            {
-              backgroundColor: colors.primary,
-              height: 12 + ((point.powerKw ?? 0) / maxPower) * 76,
-            },
-          ]}
-        />
-      ))}
+    <View style={styles.chartGroup}>
+      <View
+        accessibilityLabel={description}
+        accessibilityRole="image"
+        accessible
+        style={[
+          styles.chart,
+          {
+            borderBottomColor: colors.chartGrid,
+            borderTopColor: colors.chartGrid,
+          },
+        ]}
+      >
+        {data.points.map((point) => (
+          <View
+            key={point.sampledAt}
+            style={[
+              styles.bar,
+              {
+                backgroundColor: colors.chartPrimary,
+                height: 12 + ((point.powerKw ?? 0) / maxPower) * 76,
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <Text style={[styles.chartSummary, { color: colors.chartAxis }]}>
+        Máxima {data.summary.maximumPowerKw ?? 0} kW · Média {data.summary.averagePowerKw ?? 0} kW ·{' '}
+        {data.summary.returnedPointCount} pontos
+      </Text>
     </View>
   );
 }
@@ -427,19 +469,39 @@ const styles = StyleSheet.create({
   bar: { borderRadius: 3, flex: 1, minWidth: 3 },
   chart: {
     alignItems: 'flex-end',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     gap: 3,
     height: 100,
     paddingTop: 8,
   },
+  chartGroup: { gap: 9 },
+  chartSummary: { fontSize: 12, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   dot: { borderRadius: 6, height: 12, marginTop: 5, width: 12 },
   filterGroup: { gap: 12 },
   flex: { flex: 1 },
   historyCard: { gap: 10, marginBottom: 10 },
   line: { height: 34, left: 5, position: 'absolute', top: 18, width: 2 },
+  historyIcon: {
+    alignItems: 'center',
+    borderRadius: 15,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  historyMetric: {
+    alignItems: 'center',
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 5,
+    minHeight: 32,
+    paddingHorizontal: 9,
+  },
+  historyMetricText: { fontSize: 13, fontWeight: '800' },
   list: { gap: 10 },
-  metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 18 },
+  metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   row: { alignItems: 'flex-start', flexDirection: 'row', gap: 10 },
   station: { fontSize: 17, fontWeight: '800' },
   timeline: { gap: 2 },

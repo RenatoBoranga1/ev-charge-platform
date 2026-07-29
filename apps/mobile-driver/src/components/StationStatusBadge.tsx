@@ -26,12 +26,12 @@ export function StationStatusBadge({ status }: { status: StationStatus }) {
   const { colors, radii } = useAppTheme();
   const statusColor =
     status === 'AVAILABLE'
-      ? colors.success
-      : status === 'PARTIAL' || status === 'RESERVED'
-        ? colors.warning
+      ? colors.stationAvailable
+      : status === 'PARTIAL' || status === 'OCCUPIED' || status === 'RESERVED'
+        ? colors.stationBusy
         : status === 'OFFLINE' || status === 'MAINTENANCE'
-          ? colors.textMuted
-          : colors.danger;
+          ? colors.stationOffline
+          : colors.stationFaulted;
 
   return (
     <View

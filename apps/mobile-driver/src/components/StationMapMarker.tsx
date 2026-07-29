@@ -10,9 +10,7 @@ export interface StationMarkerVisual {
   tone: 'success' | 'warning' | 'danger' | 'neutral';
 }
 
-export function getStationMarkerVisual(
-  status: StationStatus | 'UNKNOWN',
-): StationMarkerVisual {
+export function getStationMarkerVisual(status: StationStatus | 'UNKNOWN'): StationMarkerVisual {
   switch (status) {
     case 'AVAILABLE':
       return { icon: 'flash', label: 'Dispon\u00edvel', tone: 'success' };
@@ -60,13 +58,11 @@ export function StationMapMarker({
   const { colors } = useAppTheme();
   const visual = getStationMarkerVisual(status);
   const color =
-    visual.tone === 'success'
-      ? colors.success
-      : visual.tone === 'warning'
-        ? colors.warning
-        : visual.tone === 'danger'
-          ? colors.danger
-          : colors.textMuted;
+    status === 'AVAILABLE'
+      ? colors.stationAvailable
+      : status === 'PARTIAL' || status === 'OCCUPIED' || status === 'RESERVED'
+        ? colors.stationBusy
+        : colors.stationOffline;
 
   return (
     <View
@@ -78,6 +74,7 @@ export function StationMapMarker({
         {
           backgroundColor: color,
           borderColor: selected ? colors.focus : colors.surface,
+          borderWidth: selected ? 4 : 3,
           transform: [{ scale: selected ? 1.12 : 1 }],
         },
       ]}
@@ -119,9 +116,7 @@ export function StationClusterMarker({ count }: { count: number }) {
       ]}
     >
       <Ionicons name="location" color={colors.primary} size={18} />
-      <Text style={[styles.clusterText, { color: colors.onPrimaryContainer }]}>
-        {count}
-      </Text>
+      <Text style={[styles.clusterText, { color: colors.onPrimaryContainer }]}>{count}</Text>
     </View>
   );
 }

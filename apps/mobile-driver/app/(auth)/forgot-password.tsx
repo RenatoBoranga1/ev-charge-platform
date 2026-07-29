@@ -8,29 +8,48 @@ import { AppButton } from '@/components/AppButton';
 import { AppHeader } from '@/components/AppHeader';
 import { AppTextField } from '@/components/AppTextField';
 import { Screen } from '@/components/Screen';
+import { BrandHero } from '@/design-system';
 
 const schema = z.object({ email: z.email('Informe um e-mail válido.') });
 type FormValues = z.infer<typeof schema>;
 
 export default function ForgotPasswordScreen() {
-  const { control, handleSubmit, formState: { errors } } = useForm<FormValues>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { email: '' },
   });
 
   return (
     <Screen>
-      <AppHeader canGoBack title="Recuperar acesso" subtitle="Enviaremos instruções se a conta existir." />
-      <Controller control={control} name="email" render={({ field }) => (
-        <AppTextField
-          autoCapitalize="none"
-          keyboardType="email-address"
-          label="E-mail"
-          value={field.value}
-          onChangeText={field.onChange}
-          error={errors.email?.message}
-        />
-      )} />
+      <AppHeader
+        canGoBack
+        title="Recuperar acesso"
+        subtitle="Enviaremos instruções se a conta existir."
+      />
+      <BrandHero
+        compact
+        eyebrow="Segurança"
+        title="Recupere seu acesso"
+        description="Informe seu e-mail para continuar com segurança."
+      />
+      <Controller
+        control={control}
+        name="email"
+        render={({ field }) => (
+          <AppTextField
+            autoCapitalize="none"
+            keyboardType="email-address"
+            label="E-mail"
+            value={field.value}
+            onChangeText={field.onChange}
+            error={errors.email?.message}
+          />
+        )}
+      />
       <AppButton
         label="Enviar instruções"
         onPress={handleSubmit(() =>
