@@ -42,8 +42,8 @@ export const palette = {
 
 export const dynamicSeeds = {
   solis: {
-    primary: palette.primary[600],
-    primaryPressed: palette.primary[700],
+    primary: palette.primary[700],
+    primaryPressed: palette.primary[900],
     primaryContainer: palette.primary[100],
     onPrimaryContainer: palette.primary[900],
     darkPrimary: '#2DD4A2',
@@ -131,6 +131,24 @@ export const typeScale = {
   labelLarge: text(14, 20, '700', 0.1),
   labelMedium: text(12, 16, '700', 0.5),
   labelSmall: text(11, 16, '700', 0.5),
+  numericLarge: text(34, 40, '800', -0.4),
+  numericMedium: text(24, 32, '800', -0.2),
+  numericSmall: text(16, 24, '700'),
+} as const;
+
+export const motion = {
+  durationFast: 120,
+  durationMedium: 220,
+  durationSlow: 360,
+  easingStandard: [0.2, 0, 0, 1] as const,
+  easingEmphasized: [0.2, 0, 0, 1.2] as const,
+} as const;
+
+export const opacity = {
+  disabled: 0.45,
+  pressed: 0.78,
+  subtle: 0.12,
+  emphasis: 0.2,
 } as const;
 
 export const elevation = {
@@ -226,6 +244,20 @@ export interface AppColors {
   onDisabled: string;
   inverseSurface: string;
   inverseOnSurface: string;
+  solarAccent: string;
+  sustainabilityAccent: string;
+  stationAvailable: string;
+  stationBusy: string;
+  stationOffline: string;
+  stationFaulted: string;
+  chartPrimary: string;
+  chartSecondary: string;
+  chartAccent: string;
+  chartGrid: string;
+  chartAxis: string;
+  chartPositive: string;
+  chartNegative: string;
+  chartNeutral: string;
   focus: string;
   overlay: string;
   scrim: string;
@@ -245,8 +277,8 @@ const lightBase: AppColors = {
   border: palette.neutral[300],
   outline: '#737985',
   outlineVariant: '#C3C8D1',
-  primary: palette.primary[600],
-  primaryPressed: palette.primary[700],
+  primary: palette.primary[700],
+  primaryPressed: palette.primary[900],
   onPrimary: palette.neutral[0],
   primaryContainer: palette.primary[100],
   onPrimaryContainer: palette.primary[900],
@@ -263,6 +295,20 @@ const lightBase: AppColors = {
   onDisabled: 'rgba(17, 24, 39, 0.38)',
   inverseSurface: palette.neutral[800],
   inverseOnSurface: palette.neutral[50],
+  solarAccent: '#B7F34A',
+  sustainabilityAccent: '#08785B',
+  stationAvailable: '#08785B',
+  stationBusy: '#9A5B00',
+  stationOffline: '#596170',
+  stationFaulted: '#B42318',
+  chartPrimary: '#274BD6',
+  chartSecondary: '#08785B',
+  chartAccent: '#8A5200',
+  chartGrid: '#CDD3DD',
+  chartAxis: '#343A46',
+  chartPositive: '#08785B',
+  chartNegative: '#B42318',
+  chartNeutral: '#596170',
   focus: palette.primary[500],
   overlay: 'rgba(17, 24, 39, 0.62)',
   scrim: 'rgba(0, 0, 0, 0.52)',
@@ -300,6 +346,20 @@ const darkBase: AppColors = {
   onDisabled: 'rgba(248, 250, 252, 0.38)',
   inverseSurface: '#E2E7EE',
   inverseOnSurface: '#202735',
+  solarAccent: '#D9FF8A',
+  sustainabilityAccent: '#6EE7BE',
+  stationAvailable: '#6EE7BE',
+  stationBusy: '#FBC36A',
+  stationOffline: '#A8B2C3',
+  stationFaulted: '#FFB4AB',
+  chartPrimary: '#AFC4FF',
+  chartSecondary: '#6EE7BE',
+  chartAccent: '#FBC36A',
+  chartGrid: '#3C4759',
+  chartAxis: '#C5CEDB',
+  chartPositive: '#6EE7BE',
+  chartNegative: '#FFB4AB',
+  chartNeutral: '#A8B2C3',
   focus: '#6EE7BE',
   overlay: 'rgba(2, 6, 23, 0.76)',
   scrim: 'rgba(0, 0, 0, 0.72)',
@@ -315,14 +375,10 @@ export function createThemeColors(
   return {
     ...base,
     primary: scheme === 'dark' ? dynamic.darkPrimary : dynamic.primary,
-    primaryPressed:
-      scheme === 'dark' ? dynamic.darkPrimaryPressed : dynamic.primaryPressed,
-    primaryContainer:
-      scheme === 'dark' ? dynamic.darkPrimaryContainer : dynamic.primaryContainer,
+    primaryPressed: scheme === 'dark' ? dynamic.darkPrimaryPressed : dynamic.primaryPressed,
+    primaryContainer: scheme === 'dark' ? dynamic.darkPrimaryContainer : dynamic.primaryContainer,
     onPrimaryContainer:
-      scheme === 'dark'
-        ? dynamic.darkOnPrimaryContainer
-        : dynamic.onPrimaryContainer,
+      scheme === 'dark' ? dynamic.darkOnPrimaryContainer : dynamic.onPrimaryContainer,
     focus: scheme === 'dark' ? dynamic.darkPrimaryPressed : dynamic.primary,
   };
 }

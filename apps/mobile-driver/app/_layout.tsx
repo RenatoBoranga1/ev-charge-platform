@@ -37,10 +37,9 @@ function NavigationRoot() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="station/[stationId]/reserve" />
         </Stack.Protected>
-        <Stack.Protected
-          guard={isAuthenticated && isDevelopmentCatalogEnabled()}
-        >
+        <Stack.Protected guard={isAuthenticated && isDevelopmentCatalogEnabled()}>
           <Stack.Screen name="dev/components" />
+          <Stack.Screen name="dev/brand-catalog" />
         </Stack.Protected>
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
