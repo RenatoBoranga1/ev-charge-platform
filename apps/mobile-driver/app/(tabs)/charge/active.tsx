@@ -35,7 +35,7 @@ export default function ActiveChargeScreen() {
   const [connectionState, setConnectionState] = useState<ChargingConnectionState>('disconnected');
   const stopIdempotencyKey = useRef('mobile-stop-' + (activeSessionId ?? 'recovered'));
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
-  const [powerSamples, setPowerSamples] = useState<number[]>([68, 71, 73, 72, 74]);
+  const [powerSamples, setPowerSamples] = useState<number[]>([]);
   const vehicles = useQuery({
     queryKey: ['vehicles'],
     queryFn: () => api.vehicles.list(),
@@ -142,23 +142,68 @@ export default function ActiveChargeScreen() {
     );
   }
 
+  const chartSamples =
+    powerSamples.length > 0
+      ? powerSamples
+      : activeSession.currentPowerKw > 0
+        ? [activeSession.currentPowerKw]
+        : [];
+  const maximumPower = chartSamples.length > 0 ? Math.max(...chartSamples) : 0;
+  const minimumPower = chartSamples.length > 0 ? Math.min(...chartSamples) : 0;
+  const measurementLabel = `${chartSamples.length} ${
+    chartSamples.length === 1 ? 'medição' : 'medições'
+  }`;
+  const connectionLabel =
+    connectionState === 'connected'
+      ? 'Conectado'
+      : connectionState === 'reconnecting'
+        ? 'Reconectando'
+        : 'Sem conexão em tempo real';
+
   return (
     <Screen>
       <AppHeader
         title="Recarga em andamento"
         subtitle={activeSession.stationName + ' · ' + activeSession.connectorLabel}
       />
-      <View style={[styles.status, { backgroundColor: colors.primary }]}>
-        <Ionicons name="flash" color={colors.onPrimary} size={22} />
-        <Text style={[styles.statusText, { color: colors.onPrimary }]}>
-          Carregando com segurança
-        </Text>
+      <View
+        accessibilityLabel={`Status da recarga: carregando. Atualizações: ${connectionLabel}.`}
+        accessibilityLiveRegion="polite"
+        style={[
+          styles.status,
+          {
+            backgroundColor: colors.primaryContainer,
+            borderColor: colors.outlineVariant,
+          },
+        ]}
+      >
+        <View style={styles.statusMain}>
+          <View style={[styles.statusIcon, { backgroundColor: colors.surface }]}>
+            <Ionicons name="flash" color={colors.primary} size={24} />
+          </View>
+          <View style={styles.statusCopy}>
+            <Text style={[styles.statusText, { color: colors.onPrimaryContainer }]}>
+              Carregando com segurança
+            </Text>
+            <Text style={[styles.statusSubtitle, { color: colors.onPrimaryContainer }]}>
+              {activeSession.stationName} · {activeSession.connectorLabel}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.connection}>
+          <View
+            style={[
+              styles.connectionDot,
+              {
+                backgroundColor: connectionState === 'connected' ? colors.success : colors.warning,
+              },
+            ]}
+          />
+          <Text style={[styles.connectionText, { color: colors.onPrimaryContainer }]}>
+            {connectionLabel}
+          </Text>
+        </View>
       </View>
-      {connectionState === 'reconnecting' ? (
-        <Text accessibilityLiveRegion="polite" style={[styles.offline, { color: colors.warning }]}>
-          Reconectando atualizacoes em tempo real...
-        </Text>
-      ) : null}
       {realtimeError ? (
         <Text accessibilityRole="alert" style={[styles.offline, { color: colors.warning }]}>
           {realtimeError} Os últimos dados conhecidos continuam visíveis.
@@ -182,6 +227,32 @@ export default function ActiveChargeScreen() {
         label="Bateria estimada"
         percent={activeSession.estimatedBatteryPercent ?? 0}
       />
+      <AppCard accessibilityLabel="Fluxo de recarga: energia, carregador e veículo">
+        <Text style={[styles.flowTitle, { color: colors.text }]}>Fluxo de recarga</Text>
+        <View style={styles.energyFlow}>
+          <FlowNode icon="flash-outline" label="Energia" />
+          <Ionicons
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            name="arrow-forward"
+            color={colors.chartPrimary}
+            size={20}
+          />
+          <FlowNode icon="git-network-outline" label="Carregador" />
+          <Ionicons
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            name="arrow-forward"
+            color={colors.chartSecondary}
+            size={20}
+          />
+          <FlowNode icon="car-sport-outline" label="Veículo" />
+        </View>
+        <Text style={[styles.flowCaption, { color: colors.textMuted }]}>
+          A origem da energia não é inferida pela sessão.
+        </Text>
+      </AppCard>
+
       <View style={styles.metrics}>
         <ChargingMetricCard label="Tempo" value={formatDuration(activeSession.elapsedSeconds)} />
         <ChargingMetricCard label="Energia" value={activeSession.energyKwh.toFixed(2)} unit="kWh" />
@@ -196,22 +267,47 @@ export default function ActiveChargeScreen() {
         />
       </View>
 
-      <AppCard>
+      <AppCard accessibilityLabel="Potência recente da sessão">
         <Text style={[styles.chartTitle, { color: colors.text }]}>Potência recente</Text>
-        <View accessibilityLabel="Gráfico de potência recente" style={styles.chart}>
-          {powerSamples.map((sample, index) => (
+        {chartSamples.length > 0 ? (
+          <>
             <View
-              key={String(index) + '-' + String(sample)}
+              accessibilityLabel={`Gráfico de potência com ${measurementLabel}. Mínima ${minimumPower.toFixed(
+                1,
+              )} quilowatts e máxima ${maximumPower.toFixed(1)} quilowatts.`}
+              accessible
+              accessibilityRole="image"
               style={[
-                styles.bar,
+                styles.chart,
                 {
-                  height: Math.max(14, Math.min(90, sample)),
-                  backgroundColor: colors.secondary,
+                  borderBottomColor: colors.chartGrid,
+                  borderTopColor: colors.chartGrid,
                 },
               ]}
-            />
-          ))}
-        </View>
+            >
+              {chartSamples.map((sample, index) => (
+                <View
+                  key={String(index) + '-' + String(sample)}
+                  style={[
+                    styles.bar,
+                    {
+                      height: 14 + (sample / Math.max(1, maximumPower)) * 76,
+                      backgroundColor: colors.chartPrimary,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+            <Text style={[styles.chartSummary, { color: colors.chartAxis }]}>
+              Mín. {minimumPower.toFixed(1)} kW · Atual {activeSession.currentPowerKw.toFixed(1)} kW
+              · Máx. {maximumPower.toFixed(1)} kW
+            </Text>
+          </>
+        ) : (
+          <Text style={[styles.chartEmpty, { color: colors.textMuted }]}>
+            Aguardando a primeira medição de potência.
+          </Text>
+        )}
       </AppCard>
 
       <AppCard>
@@ -271,30 +367,78 @@ export default function ActiveChargeScreen() {
   );
 }
 
+function FlowNode({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
+  const { colors } = useAppTheme();
+  return (
+    <View accessibilityLabel={label} style={styles.flowNode}>
+      <View style={[styles.flowIcon, { backgroundColor: colors.primaryContainer }]}>
+        <Ionicons name={icon} color={colors.primary} size={22} />
+      </View>
+      <Text style={[styles.flowLabel, { color: colors.text }]}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  status: {
-    minHeight: 52,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  statusText: { fontSize: 15, fontWeight: '900' },
-  offline: { fontSize: 13, lineHeight: 18, fontWeight: '700' },
-  metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  chartTitle: { fontSize: 16, fontWeight: '800' },
+  bar: { borderRadius: 4, flex: 1, minWidth: 6 },
   chart: {
-    height: 100,
-    flexDirection: 'row',
     alignItems: 'flex-end',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
     gap: 5,
+    height: 108,
     marginTop: 14,
+    paddingTop: 8,
   },
-  bar: { flex: 1, minWidth: 6, borderRadius: 4 },
+  chartEmpty: { fontSize: 13, lineHeight: 19, marginTop: 12 },
+  chartSummary: { fontSize: 12, fontWeight: '700', marginTop: 10 },
+  chartTitle: { fontSize: 16, fontWeight: '800' },
+  connection: { alignItems: 'center', flexDirection: 'row', gap: 7 },
+  connectionDot: { borderRadius: 5, height: 10, width: 10 },
+  connectionText: { fontSize: 12, fontWeight: '800' },
+  energyFlow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  flowCaption: { fontSize: 12, lineHeight: 18, marginTop: 14 },
+  flowIcon: {
+    alignItems: 'center',
+    borderRadius: 16,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  flowLabel: { fontSize: 11, fontWeight: '800', textAlign: 'center' },
+  flowNode: { alignItems: 'center', flex: 1, gap: 6 },
+  flowTitle: { fontSize: 16, fontWeight: '900' },
   impactTitle: { fontSize: 15, fontWeight: '800' },
   impactValue: { fontSize: 20, fontWeight: '900', marginTop: 7 },
-  tariff: { fontSize: 13, marginTop: 7 },
-  secondaryActions: { flexDirection: 'row', gap: 10 },
+  metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  offline: { fontSize: 13, fontWeight: '700', lineHeight: 18 },
   secondaryAction: { flex: 1 },
+  secondaryActions: { flexDirection: 'row', gap: 10 },
+  status: {
+    alignItems: 'stretch',
+    borderRadius: 22,
+    borderWidth: 1,
+    gap: 14,
+    minHeight: 104,
+    padding: 16,
+  },
+  statusCopy: { flex: 1, gap: 3 },
+  statusIcon: {
+    alignItems: 'center',
+    borderRadius: 16,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  statusMain: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  statusSubtitle: { fontSize: 12, lineHeight: 17 },
+  statusText: { fontSize: 15, fontWeight: '900' },
+  tariff: { fontSize: 13, marginTop: 7 },
 });

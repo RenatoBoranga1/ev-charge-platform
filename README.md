@@ -101,6 +101,24 @@ metodologia confiável. Consulte
 `docs/architecture/adr-009-dashboard-and-charging-history.md` e
 `docs/mobile/dashboard-and-charging-history.md`.
 
+A identidade do produto separa **Solar Soluções** (empresa) de **Solis**
+(produto) por uma configuração central de marca. Os nove arquivos oficiais
+foram incorporados sem alterações de pixels e estão catalogados em
+`docs/brand/brand-assets.md`, com origem, dimensões, hashes SHA-256 e finalidade
+de cada variante. A ordem textual fornecida divergia do conteúdo visual dos
+arquivos; por isso, a classificação foi feita pelo conteúdo e registrada
+explicitamente.
+
+Os ativos oficiais agora alimentam o ícone do aplicativo, splash screen,
+adaptive icon, ícone monocromático, favicon e marcas exibidas no aplicativo.
+A paleta foi extraída objetivamente do símbolo oficial limpo e está documentada
+em `docs/brand/color-palette.md` e `docs/brand/palette-extraction.json`. Ela
+ainda não foi homologada por um manual de marca com códigos oficiais. A
+homologação nativa em APK e dispositivo físico também permanece pendente; por
+isso, o PR da fase continua em draft. Consulte
+`docs/architecture/adr-010-solar-solucoes-brand-system.md` e
+`docs/mobile/solar-solucoes-branding.md`.
+
 O QR em JSON carrega a hierarquia completa. Deep links carregam somente `connectorId`; o backend resolve connector, EVSE, charge point e estação e rejeita hierarquias divergentes.
 
 ## Banco de dados

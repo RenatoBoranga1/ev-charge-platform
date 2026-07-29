@@ -21,7 +21,7 @@ export function AppButton({
   loading = false,
   accessibilityHint,
 }: AppButtonProps) {
-  const { colors, radii } = useAppTheme();
+  const { colors, opacity, radii, shadows, sizes, typeScale } = useAppTheme();
   const backgroundColor =
     variant === 'primary'
       ? colors.primary
@@ -31,9 +31,7 @@ export function AppButton({
           ? colors.danger
           : 'transparent';
   const textColor =
-    variant === 'outline' || variant === 'ghost'
-      ? colors.primary
-      : colors.onPrimary;
+    variant === 'outline' || variant === 'ghost' ? colors.primary : colors.onPrimary;
   const borderColor = variant === 'outline' ? colors.primary : backgroundColor;
 
   return (
@@ -46,18 +44,20 @@ export function AppButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
+        variant === 'primary' ? shadows.level1 : undefined,
         {
           backgroundColor,
           borderColor,
-          borderRadius: radii.md,
-          opacity: disabled ? 0.45 : pressed ? 0.78 : 1,
+          borderRadius: radii.lg,
+          minHeight: sizes.buttonHeight,
+          opacity: disabled ? opacity.disabled : pressed ? opacity.pressed : 1,
         },
       ]}
     >
       {loading ? (
         <ActivityIndicator color={textColor} />
       ) : (
-        <Text style={[styles.label, { color: textColor }]}>{label}</Text>
+        <Text style={[typeScale.labelLarge, styles.label, { color: textColor }]}>{label}</Text>
       )}
     </Pressable>
   );
@@ -65,11 +65,10 @@ export function AppButton({
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 50,
     borderWidth: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  label: { textAlign: 'center' },
 });

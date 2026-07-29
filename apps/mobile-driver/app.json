@@ -5,20 +5,31 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "solis",
+    "icon": "./assets/brand/solis-app-icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/brand/solis-splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#082868"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.solis.plataformas"
+      "bundleIdentifier": "com.solis.plataformas",
+      "icon": "./assets/brand/solis-app-icon.png"
     },
     "android": {
       "package": "com.solis.plataformas",
+      "icon": "./assets/brand/solis-app-icon.png",
       "adaptiveIcon": {
-        "backgroundColor": "#ECFEF7"
+        "backgroundColor": "#082868",
+        "foregroundImage": "./assets/brand/solis-symbol.png",
+        "monochromeImage": "./assets/brand/solis-adaptive-icon-monochrome.png"
       }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/brand/solis-symbol.png"
     },
     "plugins": [
       "expo-router",

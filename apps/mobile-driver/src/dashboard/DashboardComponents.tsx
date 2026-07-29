@@ -7,6 +7,7 @@ import { AppCard } from '@/components/AppCard';
 import { AppTextField } from '@/components/AppTextField';
 import { EmptyState, ErrorState } from '@/components/AsyncState';
 import { FilterChip } from '@/components/FilterChip';
+import { BrandHero } from '@/design-system';
 import { Skeleton } from '@/design-system/Loading';
 import { Tag } from '@/design-system/Indicators';
 import { useAppTheme } from '@/theme/ThemeProvider';
@@ -18,10 +19,20 @@ import { customPeriodQuery, type DashboardPeriodPreset } from './periods';
 export function DashboardHeader({ name }: { name: string }) {
   const { colors } = useAppTheme();
   return (
-    <View style={styles.header}>
-      <DashboardGreeting name={name} />
-      <Ionicons accessibilityElementsHidden color={colors.primary} name="leaf-outline" size={30} />
-    </View>
+    <BrandHero
+      compact
+      eyebrow="Sua energia"
+      title={name}
+      description="Acompanhe sua mobilidade elétrica com clareza."
+      trailing={
+        <Ionicons
+          accessibilityElementsHidden
+          color={colors.primary}
+          name="flash-outline"
+          size={30}
+        />
+      }
+    />
   );
 }
 

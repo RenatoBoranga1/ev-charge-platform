@@ -27,8 +27,7 @@ export default function ProfileScreen() {
     queryFn: () => api.users.getMe(),
   });
   const deletion = useMutation({
-    mutationFn: () =>
-      api.users.requestDeletion(profile.data?.recordVersion ?? 0),
+    mutationFn: () => api.users.requestDeletion(profile.data?.recordVersion ?? 0),
     onSuccess: async (updated) => {
       queryClient.setQueryData(['profile'], updated);
       await queryClient.invalidateQueries({ queryKey: ['profile'] });
@@ -39,7 +38,11 @@ export default function ProfileScreen() {
   });
 
   if (profile.isLoading) {
-    return <Screen><LoadingState title="Carregando perfil" /></Screen>;
+    return (
+      <Screen>
+        <LoadingState title="Carregando perfil" />
+      </Screen>
+    );
   }
   if (profile.isError) {
     return (
@@ -56,6 +59,7 @@ export default function ProfileScreen() {
   if (!profile.data) return null;
   const user = profile.data;
 
+  const location = [user.city, user.state, user.country].filter(Boolean).join(' · ');
   return (
     <Screen>
       <AppHeader
@@ -63,34 +67,65 @@ export default function ProfileScreen() {
         onAction={() => router.push('/(tabs)/profile/edit')}
         title="Sua conta Solis"
       />
-      <View style={styles.profile}>
+      <View
+        accessibilityLabel={`Perfil de ${user.name}`}
+        style={[
+          styles.profile,
+          {
+            backgroundColor: colors.primaryContainer,
+            borderColor: colors.outlineVariant,
+          },
+        ]}
+      >
         <Avatar
           name={user.name}
           size={76}
           {...(user.avatarUrl ? { source: { uri: user.avatarUrl } } : {})}
         />
         <View style={styles.profileCopy}>
-          <Text style={[styles.name, { color: colors.text }]}>{user.name}</Text>
-          <Text style={[styles.email, { color: colors.textMuted }]}>
-            {user.email}
-          </Text>
-          <Text style={[styles.location, { color: colors.textMuted }]}>
-            {[user.city, user.state, user.country].filter(Boolean).join(' · ')}
-          </Text>
+          <Text style={[styles.name, { color: colors.onPrimaryContainer }]}>{user.name}</Text>
+          <Text style={[styles.email, { color: colors.onPrimaryContainer }]}>{user.email}</Text>
+          {location ? (
+            <Text style={[styles.location, { color: colors.onPrimaryContainer }]}>{location}</Text>
+          ) : null}
+          <View
+            accessibilityLabel="Conta protegida"
+            style={[styles.security, { backgroundColor: colors.surface }]}
+          >
+            <Ionicons name="shield-checkmark-outline" color={colors.primary} size={15} />
+            <Text style={[styles.securityText, { color: colors.text }]}>Conta protegida</Text>
+          </View>
         </View>
       </View>
 
       <View style={styles.metrics}>
-        <ProfileMetric icon="flash-outline" label="Energia" value={`${user.totalEnergyKwh.toFixed(1)} kWh`} />
-        <ProfileMetric icon="leaf-outline" label="CO₂ evitado" value={`${user.avoidedCo2Kg.toFixed(1)} kg`} />
-        <ProfileMetric icon="receipt-outline" label="Sessões" value={String(user.chargingSessions)} />
-        <ProfileMetric icon="wallet-outline" label="Economia" value={formatCurrency(user.estimatedSavings)} />
+        <ProfileMetric
+          icon="flash-outline"
+          label="Energia"
+          value={`${user.totalEnergyKwh.toFixed(1)} kWh`}
+        />
+        <ProfileMetric
+          icon="leaf-outline"
+          label="CO₂ evitado"
+          value={`${user.avoidedCo2Kg.toFixed(1)} kg`}
+        />
+        <ProfileMetric
+          icon="receipt-outline"
+          label="Sessões"
+          value={String(user.chargingSessions)}
+        />
+        <ProfileMetric
+          icon="wallet-outline"
+          label="Economia"
+          value={formatCurrency(user.estimatedSavings)}
+        />
       </View>
 
       {user.accountDeletionRequestedAt ? (
         <AppCard>
           <Text accessibilityRole="alert" style={[styles.notice, { color: colors.danger }]}>
-            Sua solicitação de exclusão está em análise. Seus dados não foram removidos automaticamente.
+            Sua solicitação de exclusão está em análise. Seus dados não foram removidos
+            automaticamente.
           </Text>
         </AppCard>
       ) : null}
@@ -156,7 +191,10 @@ function ProfileMetric({
 }) {
   const { colors } = useAppTheme();
   return (
-    <View style={[styles.metric, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View
+      accessibilityLabel={`${label}: ${value}`}
+      style={[styles.metric, { backgroundColor: colors.surface, borderColor: colors.border }]}
+    >
       <Ionicons name={icon} size={20} color={colors.primary} />
       <Text style={[styles.metricValue, { color: colors.text }]}>{value}</Text>
       <Text style={[styles.metricLabel, { color: colors.textMuted }]}>{label}</Text>
@@ -165,7 +203,14 @@ function ProfileMetric({
 }
 
 const styles = StyleSheet.create({
-  profile: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  profile: {
+    alignItems: 'center',
+    borderRadius: 28,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 15,
+    padding: 20,
+  },
   profileCopy: { flex: 1 },
   name: { fontSize: 23, fontWeight: '900' },
   email: { fontSize: 14, marginTop: 5 },
@@ -177,6 +222,17 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 13,
   },
+  security: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 5,
+    marginTop: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  securityText: { fontSize: 11, fontWeight: '800' },
   metricValue: { fontSize: 17, fontWeight: '900', marginTop: 8 },
   metricLabel: { fontSize: 12, marginTop: 3 },
   notice: { fontSize: 14, lineHeight: 20, fontWeight: '700' },

@@ -1,5 +1,7 @@
 export { AppBar } from './AppBar';
 export { Avatar } from './Avatar';
+export { BrandHero } from './BrandHero';
+export { BrandMark } from './BrandMark';
 export { BottomSheet } from './BottomSheet';
 export { PrimaryButton, SecondaryButton, OutlinedButton } from './Buttons';
 export { Card } from './Card';
@@ -12,4 +14,5 @@ export { Loading, Skeleton } from './Loading';
 export { NavigationBar, type NavigationBarItem } from './NavigationBar';
 export { SearchBar } from './SearchBar';
 export { Surface } from './Surface';
+export * from './brand';
 export { EmptyState, ErrorState, LoadingState } from '@/components/AsyncState';

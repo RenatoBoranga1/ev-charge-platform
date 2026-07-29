@@ -1,11 +1,5 @@
 import type { PropsWithChildren } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/theme/ThemeProvider';
 
@@ -30,11 +24,9 @@ export function Card({
     styles.card,
     variant === 'elevated' ? shadows.level1 : undefined,
     {
-      backgroundColor:
-        variant === 'filled' ? colors.surfaceContainer : colors.surface,
-      borderColor:
-        variant === 'outlined' ? colors.outlineVariant : 'transparent',
-      borderRadius: radii.lg,
+      backgroundColor: variant === 'filled' ? colors.surfaceContainer : colors.surface,
+      borderColor: variant === 'outlined' ? colors.outlineVariant : 'transparent',
+      borderRadius: radii.xl,
     },
     style,
   ];
@@ -62,7 +54,7 @@ export function Card({
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    padding: 16,
+    padding: 18,
   },
   pressed: {
     opacity: 0.78,

@@ -8,10 +8,10 @@ import { z } from 'zod';
 import { useAuth } from '@/auth/AuthProvider';
 import { AppButton } from '@/components/AppButton';
 import { AppCard } from '@/components/AppCard';
-import { AppHeader } from '@/components/AppHeader';
 import { AppTextField } from '@/components/AppTextField';
 import { Screen } from '@/components/Screen';
 import { getDemoCredentials } from '@/config/runtime';
+import { BrandHero } from '@/design-system';
 import { useAppTheme } from '@/theme/ThemeProvider';
 
 const schema = z.object({
@@ -40,15 +40,17 @@ export default function LoginScreen() {
       await signIn(values);
       router.replace('/');
     } catch (error) {
-      setSubmitError(
-        error instanceof Error ? error.message : 'Não foi possível entrar.',
-      );
+      setSubmitError(error instanceof Error ? error.message : 'Não foi possível entrar.');
     }
   });
 
   return (
     <Screen contentStyle={styles.content}>
-      <AppHeader title="Entrar na Solis" subtitle="Retome sua jornada elétrica." />
+      <BrandHero
+        eyebrow="Solar Soluções"
+        title="Bem-vindo à Solis"
+        description="Energia que move o futuro."
+      />
       <AppCard>
         <Controller
           control={control}
@@ -90,7 +92,7 @@ export default function LoginScreen() {
           </Text>
         ) : null}
         {submitError ? (
-          <Text accessibilityRole="alert" style={styles.error}>
+          <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>
             {submitError}
           </Text>
         ) : null}
@@ -112,7 +114,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   content: { justifyContent: 'center' },
   demo: { fontSize: 12, marginTop: 8 },
-  error: { color: '#B42318', fontSize: 13, fontWeight: '700', marginTop: 8 },
+  error: { fontSize: 13, fontWeight: '700', marginTop: 8 },
   link: {
     minHeight: 44,
     textAlignVertical: 'center',
