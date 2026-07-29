@@ -12,3 +12,13 @@
 
 Evite gradientes sem aprovação, sombras fortes, cards aninhados, imagens
 externas genéricas e informações de sustentabilidade não comprovadas.
+
+## Superfícies operacionais
+
+- Pins combinam cor, ícone, borda e texto acessível.
+- Detalhes de estação exibem “não informado” em vez de fabricar preço,
+  horário, distância ou avaliação.
+- Recarga ativa usa a expressão neutra “Fluxo de recarga” e não atribui origem
+  solar sem telemetria.
+- Gráficos sempre possuem descrição e resumo numérico visível.
+- Perfil e garagem usam dados reais das APIs; nenhuma imagem externa nova foi

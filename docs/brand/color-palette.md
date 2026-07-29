@@ -20,3 +20,14 @@ por teste WCAG AA.
 Gradientes oficiais não foram definidos. Após receber os ativos, as cores
 deverão ser extraídas por ferramenta, registradas em HEX/RGB e novamente
 validadas por contraste.
+
+## Aplicação operacional provisória
+
+Mapa e badges usam os papéis `stationAvailable`, `stationBusy`,
+`stationOffline` e `stationFaulted`, sem depender somente da cor. Gráficos de
+potência usam `chartPrimary`, `chartSecondary`, `chartGrid` e `chartAxis`, com
+resumo textual acessível.
+
+Nenhum `palette-extraction.json` foi gerado: sem ativo mestre oficial, qualquer
+frequência, HEX, RGB ou seleção semântica seria fabricada. Por isso
+`palette.approved` permanece `false`, a origem permanece

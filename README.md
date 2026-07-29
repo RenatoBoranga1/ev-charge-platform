@@ -109,6 +109,12 @@ provisório. Consulte
 `docs/architecture/adr-010-solar-solucoes-brand-system.md` e
 `docs/mobile/solar-solucoes-branding.md`.
 
+O segundo conjunto da Fase 4.5 separa também os gates de ativos mobile e web e
+moderniza mapa, detalhes de estação, recarga ativa, histórico, perfil, garagem,
+cadastro e recuperação. Como os ativos oficiais continuam ausentes, paleta,
+ícone, adaptive icon, splash e favicon permanecem provisórios e o PR da fase
+deve continuar em draft.
+
 O QR em JSON carrega a hierarquia completa. Deep links carregam somente `connectorId`; o backend resolve connector, EVSE, charge point e estação e rejeita hierarquias divergentes.
 
 ## Banco de dados

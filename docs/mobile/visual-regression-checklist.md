@@ -17,3 +17,15 @@ Validar em tema claro, escuro e sistema:
 
 Antes de homologar a marca, incluir ainda splash, adaptive icon e logo oficiais
 em APK de desenvolvimento e release, dispositivo físico e tema claro/escuro.
+
+## Estado deste conjunto
+
+Cobertura automatizada verifica gates de ativos, fallbacks, contraste, pins,
+cards de estação, fluxo de recarga, reconexão, gráfico textual e histórico.
+Lint, typecheck, testes, bundle e E2E devem ser repetidos após todas as
+alterações.
+
+Continuam manuais e bloqueados por ambiente/insumos: comparação com o pacote
+oficial, adaptive icon, splash, favicon, paleta extraída, APK de
+desenvolvimento/release, TalkBack, fonte ampliada, redução de movimento,
+emulador e dispositivo físico. Nenhum desses itens pode ser marcado como
