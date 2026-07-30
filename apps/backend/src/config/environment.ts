@@ -1,5 +1,6 @@
 type OcppAuthMode = 'basic' | 'none';
 type DuplicateConnectionPolicy = 'replace' | 'reject';
+export type PaymentsMode = 'disabled' | 'mock' | 'sandbox' | 'production';
 
 interface Environment {
   backendInternalUrl: string;
@@ -20,6 +21,12 @@ interface Environment {
   ocppMaxPayloadBytes: number;
   ocppMessageRateLimit: number;
   ocppPort: number;
+  maximumMoneyMinor: bigint;
+  paymentReconciliationEnabled: boolean;
+  paymentReconciliationIntervalMs: number;
+  paymentWebhookSecret: string;
+  paymentWebhookToleranceSeconds: number;
+  paymentsMode: PaymentsMode;
   port: number;
   redisUrl: string;
   refreshTokenTtlDays: number;
@@ -90,6 +97,28 @@ const historyCursorSecret = requiredSecret(
 if (historyCursorSecret === jwtAccessSecret) {
   throw new Error('HISTORY_CURSOR_SECRET must differ from JWT_ACCESS_SECRET.');
 }
+const paymentsMode = oneOf<PaymentsMode>(
+  process.env.PAYMENTS_MODE,
+  'disabled',
+  ['disabled', 'mock', 'sandbox', 'production'],
+);
+if (paymentsMode === 'production') {
+  throw new Error('PAYMENTS_MODE=production is intentionally blocked in Phase 5.');
+}
+if (paymentsMode === 'sandbox' && !process.env.PAYMENT_WEBHOOK_SECRET) {
+  throw new Error('Sandbox payments require PAYMENT_WEBHOOK_SECRET.');
+}
+const maximumMoneyMinor = BigInt(
+  process.env.MAXIMUM_MONEY_MINOR ?? '100000000000',
+);
+if (maximumMoneyMinor <= 0n) {
+  throw new Error('MAXIMUM_MONEY_MINOR must be a positive integer.');
+}
+const paymentWebhookSecret = requiredSecret(
+  process.env.PAYMENT_WEBHOOK_SECRET,
+  'PAYMENT_WEBHOOK_SECRET',
+  'development-payment-webhook-secret-change-me',
+);
 
 export const environment: Environment = {
   backendInternalUrl:
@@ -119,6 +148,17 @@ export const environment: Environment = {
   ocppMaxPayloadBytes: positiveInteger(process.env.OCPP_MAX_PAYLOAD_BYTES, 64 * 1024),
   ocppMessageRateLimit: positiveInteger(process.env.OCPP_MESSAGE_RATE_LIMIT, 120),
   ocppPort: positiveInteger(process.env.OCPP_PORT, 9000),
+  maximumMoneyMinor,
+  paymentReconciliationEnabled: booleanValue(
+    process.env.PAYMENT_RECONCILIATION_ENABLED,
+    false,
+  ),
+  paymentReconciliationIntervalMs: positiveInteger(
+    process.env.PAYMENT_RECONCILIATION_INTERVAL_MS, 15 * 60_000),
+  paymentWebhookSecret,
+  paymentWebhookToleranceSeconds: positiveInteger(
+    process.env.PAYMENT_WEBHOOK_TOLERANCE_SECONDS, 300),
+  paymentsMode,
   port: positiveInteger(process.env.PORT, 8000),
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
   refreshTokenTtlDays: positiveInteger(

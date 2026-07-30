@@ -79,13 +79,130 @@ enum ChargingSessionStatus {
   CANCELLED
 }
 
-enum PaymentStatus {
+enum LedgerAccountOwnerType {
+  USER
+  PLATFORM
+  OPERATOR
+}
+
+enum LedgerAccountType {
+  USER_WALLET_AVAILABLE
+  USER_WALLET_RESERVED
+  PAYMENT_GATEWAY_CLEARING
+  OPERATOR_REVENUE
+  REFUND_CLEARING
+  PAYMENT_FEES
+  RECONCILIATION_CLEARING
+}
+
+enum LedgerAccountStatus {
+  ACTIVE
+  BLOCKED
+  CLOSED
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerTransactionType {
+  TOP_UP
+  AUTHORIZATION
+  CAPTURE
+  RELEASE
+  REFUND
+  ADJUSTMENT
+  AUTO_RECHARGE
+  REVERSAL
+}
+
+enum LedgerTransactionStatus {
   PENDING
-  AUTHORIZED
-  CAPTURED
+  POSTED
+  REVERSED
   FAILED
-  REFUNDED
+}
+
+enum WalletStatus {
+  ACTIVE
+  BLOCKED
+  CLOSED
+}
+
+enum WalletReservationStatus {
+  RESERVED
+  CAPTURED
+  RELEASED
+  FAILED
+}
+
+enum PaymentIntentType {
+  WALLET_TOP_UP
+  CHARGING_AUTHORIZATION
+  CHARGING_CAPTURE
+  AUTO_RECHARGE
+  REFUND
+}
+
+enum PaymentIntentStatus {
+  CREATED
+  PENDING
+  REQUIRES_ACTION
+  AUTHORIZED
+  PROCESSING
+  CAPTURED
   CANCELLED
+  EXPIRED
+  FAILED
+  REQUIRES_REVIEW
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentMethodType {
+  CARD
+  PIX
+  WALLET
+}
+
+enum PaymentMethodStatus {
+  ACTIVE
+  EXPIRED
+  BLOCKED
+  REMOVED
+}
+
+enum ReceiptStatus {
+  ISSUED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REQUIRES_REVIEW
+}
+
+enum PaymentWebhookProcessingStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  DUPLICATE
+  FAILED
+  REQUIRES_REVIEW
+}
+
+enum PaymentReconciliationStatus {
+  MATCHED
+  MISSING_LOCALLY
+  MISSING_AT_PROVIDER
+  AMOUNT_MISMATCH
+  STATUS_MISMATCH
+  REQUIRES_REVIEW
 }
 
 enum OutboxStatus {
@@ -118,57 +235,70 @@ enum OcppMessageDirection {
 }
 
 model Tenant {
-  id           String        @id @default(uuid()) @db.Uuid
-  name         String
-  slug         String        @unique
-  users        User[]
-  operators    Operator[]
-  stations     Station[]
-  auditLogs    AuditLog[]
-  outboxEvents OutboxEvent[]
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  deletedAt    DateTime?     @map("deleted_at")
-  version      Int           @default(1)
+  id                     String                  @id @default(uuid()) @db.Uuid
+  name                   String
+  slug                   String                  @unique
+  users                  User[]
+  operators              Operator[]
+  stations               Station[]
+  auditLogs              AuditLog[]
+  outboxEvents           OutboxEvent[]
+  ledgerAccounts         LedgerAccount[]
+  ledgerTransactions     LedgerTransaction[]
+  wallets                Wallet[]
+  paymentIntents         PaymentIntent[]
+  paymentMethods         PaymentMethod[]
+  paymentPolicyConfigs   PaymentPolicyConfig[]
+  receipts               Receipt[]
+  autoRechargeRules      AutoRechargeRule[]
+  paymentReconciliations PaymentReconciliation[]
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+  deletedAt              DateTime?               @map("deleted_at")
+  version                Int                     @default(1)
 
   @@index([deletedAt])
   @@map("tenants")
 }
 
 model User {
-  id               String               @id @default(uuid()) @db.Uuid
-  tenantId         String               @map("tenant_id") @db.Uuid
-  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  email            String
-  passwordHash     String               @map("password_hash")
-  role             UserRole             @default(DRIVER)
-  name             String
-  firstName        String?              @map("first_name")
-  lastName         String?              @map("last_name")
-  phone            String?
-  avatarUrl        String?              @map("avatar_url")
-  city             String?
-  state            String?
-  country          String               @default("BR")
-  language         String               @default("pt-BR")
-  theme            ProfileTheme         @default(SYSTEM)
-  preferences      Json?
-  notificationPreferences Json?         @map("notification_preferences")
-  privacyPreferences Json?              @map("privacy_preferences")
-  accountDeletionRequestedAt DateTime?  @map("account_deletion_requested_at")
-  totalEnergyKwh   Decimal              @default(0) @map("total_energy_kwh") @db.Decimal(12, 3)
-  avoidedCo2Kg     Decimal              @default(0) @map("avoided_co2_kg") @db.Decimal(12, 3)
-  estimatedSavings Decimal              @default(0) @map("estimated_savings") @db.Decimal(12, 2)
-  refreshTokens    RefreshToken[]
-  vehicles         Vehicle[]
-  reservations     Reservation[]
-  chargingSessions ChargingSession[]
-  payments         PaymentTransaction[]
-  auditLogs        AuditLog[]
-  createdAt        DateTime             @default(now()) @map("created_at")
-  updatedAt        DateTime             @updatedAt @map("updated_at")
-  deletedAt        DateTime?            @map("deleted_at")
-  version          Int                  @default(1)
+  id                         String             @id @default(uuid()) @db.Uuid
+  tenantId                   String             @map("tenant_id") @db.Uuid
+  tenant                     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  email                      String
+  passwordHash               String             @map("password_hash")
+  role                       UserRole           @default(DRIVER)
+  name                       String
+  firstName                  String?            @map("first_name")
+  lastName                   String?            @map("last_name")
+  phone                      String?
+  avatarUrl                  String?            @map("avatar_url")
+  city                       String?
+  state                      String?
+  country                    String             @default("BR")
+  language                   String             @default("pt-BR")
+  theme                      ProfileTheme       @default(SYSTEM)
+  preferences                Json?
+  notificationPreferences    Json?              @map("notification_preferences")
+  privacyPreferences         Json?              @map("privacy_preferences")
+  accountDeletionRequestedAt DateTime?          @map("account_deletion_requested_at")
+  totalEnergyKwh             Decimal            @default(0) @map("total_energy_kwh") @db.Decimal(12, 3)
+  avoidedCo2Kg               Decimal            @default(0) @map("avoided_co2_kg") @db.Decimal(12, 3)
+  estimatedSavings           Decimal            @default(0) @map("estimated_savings") @db.Decimal(12, 2)
+  refreshTokens              RefreshToken[]
+  vehicles                   Vehicle[]
+  reservations               Reservation[]
+  chargingSessions           ChargingSession[]
+  wallets                    Wallet[]
+  paymentIntents             PaymentIntent[]
+  paymentMethods             PaymentMethod[]
+  receipts                   Receipt[]
+  autoRechargeRules          AutoRechargeRule[]
+  auditLogs                  AuditLog[]
+  createdAt                  DateTime           @default(now()) @map("created_at")
+  updatedAt                  DateTime           @updatedAt @map("updated_at")
+  deletedAt                  DateTime?          @map("deleted_at")
+  version                    Int                @default(1)
 
   @@unique([tenantId, email])
   @@index([tenantId, deletedAt])
@@ -194,33 +324,33 @@ model RefreshToken {
 }
 
 model Vehicle {
-  id                              String      @id @default(uuid()) @db.Uuid
-  userId                          String      @map("user_id") @db.Uuid
-  user                            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand                           String
-  model                           String
-  nickname                        String      @default("Meu veículo")
-  trim                            String?
-  year                            Int?
-  color                           String?
-  licensePlate                    String?     @map("license_plate")
-  vin                             String?
-  vehicleType                     VehicleType @map("vehicle_type")
-  batteryCapacityKwh              Decimal     @map("battery_capacity_kwh") @db.Decimal(8, 2)
-  estimatedRangeKm                Int?        @map("estimated_range_km")
-  averageConsumptionKwhPer100Km   Decimal?    @map("average_consumption_kwh_per_100_km") @db.Decimal(8, 2)
-  maximumAcPowerKw                Decimal?    @map("maximum_ac_power_kw") @db.Decimal(8, 2)
-  maximumDcPowerKw                Decimal?    @map("maximum_dc_power_kw") @db.Decimal(8, 2)
-  supportedPlugTypes              PlugType[]  @map("supported_plug_types")
-  status                          VehicleStatus @default(ACTIVE)
-  imageUrl                        String?     @map("image_url")
-  notes                           String?
-  isDefault                       Boolean     @default(false) @map("is_default")
-  chargingSessions                ChargingSession[]
-  createdAt                       DateTime    @default(now()) @map("created_at")
-  updatedAt                       DateTime    @updatedAt @map("updated_at")
-  deletedAt                       DateTime?   @map("deleted_at")
-  version                         Int         @default(1)
+  id                            String            @id @default(uuid()) @db.Uuid
+  userId                        String            @map("user_id") @db.Uuid
+  user                          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand                         String
+  model                         String
+  nickname                      String            @default("Meu veículo")
+  trim                          String?
+  year                          Int?
+  color                         String?
+  licensePlate                  String?           @map("license_plate")
+  vin                           String?
+  vehicleType                   VehicleType       @map("vehicle_type")
+  batteryCapacityKwh            Decimal           @map("battery_capacity_kwh") @db.Decimal(8, 2)
+  estimatedRangeKm              Int?              @map("estimated_range_km")
+  averageConsumptionKwhPer100Km Decimal?          @map("average_consumption_kwh_per_100_km") @db.Decimal(8, 2)
+  maximumAcPowerKw              Decimal?          @map("maximum_ac_power_kw") @db.Decimal(8, 2)
+  maximumDcPowerKw              Decimal?          @map("maximum_dc_power_kw") @db.Decimal(8, 2)
+  supportedPlugTypes            PlugType[]        @map("supported_plug_types")
+  status                        VehicleStatus     @default(ACTIVE)
+  imageUrl                      String?           @map("image_url")
+  notes                         String?
+  isDefault                     Boolean           @default(false) @map("is_default")
+  chargingSessions              ChargingSession[]
+  createdAt                     DateTime          @default(now()) @map("created_at")
+  updatedAt                     DateTime          @updatedAt @map("updated_at")
+  deletedAt                     DateTime?         @map("deleted_at")
+  version                       Int               @default(1)
 
   @@index([userId, deletedAt])
   @@index([userId, isDefault])
@@ -246,33 +376,33 @@ model Operator {
 }
 
 model Station {
-  id             String         @id @default(uuid()) @db.Uuid
-  tenantId       String         @map("tenant_id") @db.Uuid
-  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  operatorId     String         @map("operator_id") @db.Uuid
-  operator       Operator       @relation(fields: [operatorId], references: [id], onDelete: Restrict)
-  name           String
-  address        String
-  city           String
-  state          String
-  country        String         @default("BR")
-  postalCode     String?        @map("postal_code")
-  latitude       Decimal        @db.Decimal(10, 7)
-  longitude      Decimal        @db.Decimal(10, 7)
-  location       Unsupported("geography(Point, 4326)")?
-  status         StationStatus  @default(AVAILABLE)
-  openingHours   String         @default("Aberta 24 horas") @map("opening_hours")
-  isOpen24Hours  Boolean        @default(true) @map("is_open_24_hours")
-  hasParking     Boolean        @default(false) @map("has_parking")
-  rating         Decimal        @default(0) @db.Decimal(3, 2)
-  chargePoints   ChargePoint[]
-  tariffs        Tariff[]
-  reservations   Reservation[]
+  id               String                                 @id @default(uuid()) @db.Uuid
+  tenantId         String                                 @map("tenant_id") @db.Uuid
+  tenant           Tenant                                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  operatorId       String                                 @map("operator_id") @db.Uuid
+  operator         Operator                               @relation(fields: [operatorId], references: [id], onDelete: Restrict)
+  name             String
+  address          String
+  city             String
+  state            String
+  country          String                                 @default("BR")
+  postalCode       String?                                @map("postal_code")
+  latitude         Decimal                                @db.Decimal(10, 7)
+  longitude        Decimal                                @db.Decimal(10, 7)
+  location         Unsupported("geography(Point, 4326)")?
+  status           StationStatus                          @default(AVAILABLE)
+  openingHours     String                                 @default("Aberta 24 horas") @map("opening_hours")
+  isOpen24Hours    Boolean                                @default(true) @map("is_open_24_hours")
+  hasParking       Boolean                                @default(false) @map("has_parking")
+  rating           Decimal                                @default(0) @db.Decimal(3, 2)
+  chargePoints     ChargePoint[]
+  tariffs          Tariff[]
+  reservations     Reservation[]
   chargingSessions ChargingSession[]
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
-  deletedAt      DateTime?      @map("deleted_at")
-  version        Int            @default(1)
+  createdAt        DateTime                               @default(now()) @map("created_at")
+  updatedAt        DateTime                               @updatedAt @map("updated_at")
+  deletedAt        DateTime?                              @map("deleted_at")
+  version          Int                                    @default(1)
 
   @@index([tenantId, status, deletedAt])
   @@index([operatorId])
@@ -286,20 +416,20 @@ model ChargePoint {
   externalCode       String                      @map("external_code")
   name               String?
   status             StationStatus               @default(AVAILABLE)
-  protocol           ChargerProtocol              @default(SIMULATOR)
-  ocppIdentity       String?                      @unique @map("ocpp_identity")
-  ocppEnabled        Boolean                      @default(false) @map("ocpp_enabled")
-  ocppAuthSecretHash String?                      @map("ocpp_auth_secret_hash")
+  protocol           ChargerProtocol             @default(SIMULATOR)
+  ocppIdentity       String?                     @unique @map("ocpp_identity")
+  ocppEnabled        Boolean                     @default(false) @map("ocpp_enabled")
+  ocppAuthSecretHash String?                     @map("ocpp_auth_secret_hash")
   connectionStatus   ChargePointConnectionStatus @default(DISCONNECTED) @map("connection_status")
-  lastSeenAt         DateTime?                    @map("last_seen_at")
+  lastSeenAt         DateTime?                   @map("last_seen_at")
   evses              Evse[]
   chargingSessions   ChargingSession[]
   ocppTransactions   OcppTransaction[]
   ocppMessages       OcppMessage[]
-  createdAt          DateTime                     @default(now()) @map("created_at")
-  updatedAt          DateTime                     @updatedAt @map("updated_at")
-  deletedAt          DateTime?                    @map("deleted_at")
-  version            Int                          @default(1)
+  createdAt          DateTime                    @default(now()) @map("created_at")
+  updatedAt          DateTime                    @updatedAt @map("updated_at")
+  deletedAt          DateTime?                   @map("deleted_at")
+  version            Int                         @default(1)
 
   @@unique([stationId, externalCode])
   @@index([stationId, deletedAt])
@@ -307,17 +437,17 @@ model ChargePoint {
 }
 
 model Evse {
-  id            String          @id @default(uuid()) @db.Uuid
-  chargePointId String          @map("charge_point_id") @db.Uuid
-  chargePoint   ChargePoint     @relation(fields: [chargePointId], references: [id], onDelete: Cascade)
-  uid           String
-  status        ConnectorStatus @default(AVAILABLE)
-  connectors    Connector[]
+  id               String            @id @default(uuid()) @db.Uuid
+  chargePointId    String            @map("charge_point_id") @db.Uuid
+  chargePoint      ChargePoint       @relation(fields: [chargePointId], references: [id], onDelete: Cascade)
+  uid              String
+  status           ConnectorStatus   @default(AVAILABLE)
+  connectors       Connector[]
   chargingSessions ChargingSession[]
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
-  deletedAt     DateTime?       @map("deleted_at")
-  version       Int             @default(1)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  deletedAt        DateTime?         @map("deleted_at")
+  version          Int               @default(1)
 
   @@unique([chargePointId, uid])
   @@index([chargePointId, deletedAt])
@@ -325,23 +455,23 @@ model Evse {
 }
 
 model Connector {
-  id                 String          @id @default(uuid()) @db.Uuid
-  evseId             String          @map("evse_id") @db.Uuid
-  evse               Evse            @relation(fields: [evseId], references: [id], onDelete: Cascade)
-  code               String          @unique
+  id                 String            @id @default(uuid()) @db.Uuid
+  evseId             String            @map("evse_id") @db.Uuid
+  evse               Evse              @relation(fields: [evseId], references: [id], onDelete: Cascade)
+  code               String            @unique
   number             Int
-  plugType           PlugType        @map("plug_type")
-  currentType        CurrentType     @map("current_type")
-  maximumPowerKw     Decimal         @map("maximum_power_kw") @db.Decimal(8, 2)
-  status             ConnectorStatus @default(AVAILABLE)
-  externalIdentifier String?         @map("external_identifier")
+  plugType           PlugType          @map("plug_type")
+  currentType        CurrentType       @map("current_type")
+  maximumPowerKw     Decimal           @map("maximum_power_kw") @db.Decimal(8, 2)
+  status             ConnectorStatus   @default(AVAILABLE)
+  externalIdentifier String?           @map("external_identifier")
   reservations       Reservation[]
   chargingSessions   ChargingSession[]
   ocppTransactions   OcppTransaction[]
-  createdAt          DateTime        @default(now()) @map("created_at")
-  updatedAt          DateTime        @updatedAt @map("updated_at")
-  deletedAt          DateTime?       @map("deleted_at")
-  version            Int             @default(1)
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+  deletedAt          DateTime?         @map("deleted_at")
+  version            Int               @default(1)
 
   @@unique([evseId, number])
   @@index([evseId, status, deletedAt])
@@ -349,23 +479,23 @@ model Connector {
 }
 
 model Tariff {
-  id             String            @id @default(uuid()) @db.Uuid
-  stationId      String            @map("station_id") @db.Uuid
-  station        Station           @relation(fields: [stationId], references: [id], onDelete: Cascade)
-  operatorId     String            @map("operator_id") @db.Uuid
-  operator       Operator          @relation(fields: [operatorId], references: [id], onDelete: Restrict)
-  name           String
-  currency       String            @default("BRL")
-  pricePerKwh    Decimal           @map("price_per_kwh") @db.Decimal(10, 4)
-  activationFee  Decimal           @default(0) @map("activation_fee") @db.Decimal(10, 2)
-  parkingFeeHour Decimal           @default(0) @map("parking_fee_hour") @db.Decimal(10, 2)
-  validFrom      DateTime          @default(now()) @map("valid_from")
-  validUntil     DateTime?         @map("valid_until")
+  id               String            @id @default(uuid()) @db.Uuid
+  stationId        String            @map("station_id") @db.Uuid
+  station          Station           @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  operatorId       String            @map("operator_id") @db.Uuid
+  operator         Operator          @relation(fields: [operatorId], references: [id], onDelete: Restrict)
+  name             String
+  currency         String            @default("BRL")
+  pricePerKwh      Decimal           @map("price_per_kwh") @db.Decimal(10, 4)
+  activationFee    Decimal           @default(0) @map("activation_fee") @db.Decimal(10, 2)
+  parkingFeeHour   Decimal           @default(0) @map("parking_fee_hour") @db.Decimal(10, 2)
+  validFrom        DateTime          @default(now()) @map("valid_from")
+  validUntil       DateTime?         @map("valid_until")
   chargingSessions ChargingSession[]
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
-  deletedAt      DateTime?         @map("deleted_at")
-  version        Int               @default(1)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  deletedAt        DateTime?         @map("deleted_at")
+  version          Int               @default(1)
 
   @@index([stationId, validFrom, validUntil])
   @@index([operatorId, deletedAt])
@@ -411,8 +541,8 @@ model ChargingSession {
   tariff             Tariff                @relation(fields: [tariffId], references: [id], onDelete: Restrict)
   idempotencyKey     String?               @map("idempotency_key")
   status             ChargingSessionStatus @default(PENDING)
-  meterStartWh       BigInt?                @map("meter_start_wh")
-  meterStopWh        BigInt?                @map("meter_stop_wh")
+  meterStartWh       BigInt?               @map("meter_start_wh")
+  meterStopWh        BigInt?               @map("meter_stop_wh")
   startedAt          DateTime?             @map("started_at")
   stoppedAt          DateTime?             @map("stopped_at")
   completedAt        DateTime?             @map("completed_at")
@@ -424,7 +554,9 @@ model ChargingSession {
   totalAmount        Decimal               @default(0) @map("total_amount") @db.Decimal(12, 2)
   meterValues        MeterValue[]
   ocppTransaction    OcppTransaction?
-  paymentTransactions PaymentTransaction[]
+  paymentIntents     PaymentIntent[]
+  walletReservations WalletReservation[]
+  receipt            Receipt?
   createdAt          DateTime              @default(now()) @map("created_at")
   updatedAt          DateTime              @updatedAt @map("updated_at")
   deletedAt          DateTime?             @map("deleted_at")
@@ -502,27 +634,294 @@ model MeterValue {
   @@map("meter_values")
 }
 
-model PaymentTransaction {
+model LedgerAccount {
+  id          String                 @id @default(uuid()) @db.Uuid
+  tenantId    String                 @map("tenant_id") @db.Uuid
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ownerType   LedgerAccountOwnerType @map("owner_type")
+  ownerId     String                 @map("owner_id") @db.Uuid
+  accountType LedgerAccountType      @map("account_type")
+  currency    String                 @default("BRL") @db.Char(3)
+  status      LedgerAccountStatus    @default(ACTIVE)
+  entries     LedgerEntry[]
+  createdAt   DateTime               @default(now()) @map("created_at")
+
+  @@unique([tenantId, ownerType, ownerId, accountType, currency])
+  @@index([tenantId, ownerId, status])
+  @@map("ledger_accounts")
+}
+
+model LedgerTransaction {
+  id                String                  @id @default(uuid()) @db.Uuid
+  tenantId          String                  @map("tenant_id") @db.Uuid
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  type              LedgerTransactionType
+  status            LedgerTransactionStatus @default(PENDING)
+  idempotencyKey    String                  @map("idempotency_key")
+  requestHash       String                  @map("request_hash")
+  externalReference String?                 @map("external_reference")
+  description       String
+  chargingSessionId String?                 @map("charging_session_id") @db.Uuid
+  paymentIntentId   String?                 @map("payment_intent_id") @db.Uuid
+  metadata          Json?
+  entries           LedgerEntry[]
+  reversalOfId      String?                 @unique @map("reversal_of_id") @db.Uuid
+  reversalOf        LedgerTransaction?      @relation("LedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy        LedgerTransaction?      @relation("LedgerReversal")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  postedAt          DateTime?               @map("posted_at")
+  reversedAt        DateTime?               @map("reversed_at")
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, createdAt, id])
+  @@index([paymentIntentId])
+  @@index([chargingSessionId])
+  @@map("ledger_transactions")
+}
+
+model LedgerEntry {
+  id            String            @id @default(uuid()) @db.Uuid
+  transactionId String            @map("transaction_id") @db.Uuid
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  accountId     String            @map("account_id") @db.Uuid
+  account       LedgerAccount     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  direction     LedgerDirection
+  amountMinor   BigInt            @map("amount_minor")
+  currency      String            @default("BRL") @db.Char(3)
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  @@index([accountId, createdAt, id])
+  @@index([transactionId])
+  @@map("ledger_entries")
+}
+
+model Wallet {
+  id                    String              @id @default(uuid()) @db.Uuid
+  tenantId              String              @map("tenant_id") @db.Uuid
+  tenant                Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId                String              @map("user_id") @db.Uuid
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  currency              String              @default("BRL") @db.Char(3)
+  availableBalanceMinor BigInt              @default(0) @map("available_balance_minor")
+  reservedBalanceMinor  BigInt              @default(0) @map("reserved_balance_minor")
+  status                WalletStatus        @default(ACTIVE)
+  reservations          WalletReservation[]
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+  deletedAt             DateTime?           @map("deleted_at")
+  version               Int                 @default(1)
+
+  @@unique([tenantId, userId, currency])
+  @@index([tenantId, userId, status, deletedAt])
+  @@map("wallets")
+}
+
+model WalletReservation {
+  id                String                  @id @default(uuid()) @db.Uuid
+  walletId          String                  @map("wallet_id") @db.Uuid
+  wallet            Wallet                  @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  chargingSessionId String?                 @unique @map("charging_session_id") @db.Uuid
+  chargingSession   ChargingSession?        @relation(fields: [chargingSessionId], references: [id], onDelete: Restrict)
+  paymentIntentId   String?                 @unique @map("payment_intent_id") @db.Uuid
+  paymentIntent     PaymentIntent?          @relation(fields: [paymentIntentId], references: [id], onDelete: Restrict)
+  amountMinor       BigInt                  @map("amount_minor")
+  capturedMinor     BigInt                  @default(0) @map("captured_minor")
+  releasedMinor     BigInt                  @default(0) @map("released_minor")
+  currency          String                  @default("BRL") @db.Char(3)
+  status            WalletReservationStatus @default(RESERVED)
+  idempotencyKey    String                  @map("idempotency_key")
+  requestHash       String                  @map("request_hash")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+  completedAt       DateTime?               @map("completed_at")
+  version           Int                     @default(1)
+
+  @@unique([walletId, idempotencyKey])
+  @@index([walletId, status, createdAt])
+  @@map("wallet_reservations")
+}
+
+model PaymentIntent {
+  id                    String                  @id @default(uuid()) @db.Uuid
+  tenantId              String                  @map("tenant_id") @db.Uuid
+  tenant                Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId                String                  @map("user_id") @db.Uuid
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  chargingSessionId     String?                 @map("charging_session_id") @db.Uuid
+  chargingSession       ChargingSession?        @relation(fields: [chargingSessionId], references: [id], onDelete: SetNull)
+  type                  PaymentIntentType
+  provider              String
+  providerReference     String?                 @map("provider_reference")
+  idempotencyKey        String                  @map("idempotency_key")
+  requestHash           String                  @map("request_hash")
+  amountMinor           BigInt                  @map("amount_minor")
+  authorizedAmountMinor BigInt                  @default(0) @map("authorized_amount_minor")
+  capturedAmountMinor   BigInt                  @default(0) @map("captured_amount_minor")
+  refundedAmountMinor   BigInt                  @default(0) @map("refunded_amount_minor")
+  currency              String                  @default("BRL") @db.Char(3)
+  status                PaymentIntentStatus     @default(CREATED)
+  expiresAt             DateTime?               @map("expires_at")
+  metadata              Json?
+  walletReservation     WalletReservation?
+  receipt               Receipt?
+  refunds               Refund[]
+  reconciliations       PaymentReconciliation[]
+  createdAt             DateTime                @default(now()) @map("created_at")
+  updatedAt             DateTime                @updatedAt @map("updated_at")
+  deletedAt             DateTime?               @map("deleted_at")
+  version               Int                     @default(1)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, userId, status, createdAt])
+  @@index([chargingSessionId, type])
+  @@index([provider, providerReference])
+  @@map("payment_intents")
+}
+
+model PaymentMethod {
+  id                String              @id @default(uuid()) @db.Uuid
+  tenantId          String              @map("tenant_id") @db.Uuid
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId            String              @map("user_id") @db.Uuid
+  user              User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  provider          String
+  providerToken     String              @map("provider_token")
+  type              PaymentMethodType
+  brand             String?
+  lastFour          String?             @map("last_four") @db.Char(4)
+  expirationMonth   Int?                @map("expiration_month")
+  expirationYear    Int?                @map("expiration_year")
+  isDefault         Boolean             @default(false) @map("is_default")
+  status            PaymentMethodStatus @default(ACTIVE)
+  autoRechargeRules AutoRechargeRule[]
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  deletedAt         DateTime?           @map("deleted_at")
+  version           Int                 @default(1)
+
+  @@unique([tenantId, provider, providerToken])
+  @@index([tenantId, userId, status, deletedAt])
+  @@map("payment_methods")
+}
+
+model PaymentPolicyConfig {
+  id                          String   @id @default(uuid()) @db.Uuid
+  tenantId                    String   @map("tenant_id") @db.Uuid
+  tenant                      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  currency                    String   @default("BRL") @db.Char(3)
+  preAuthorizationAmountMinor BigInt   @map("pre_authorization_amount_minor")
+  minimumWalletBalanceMinor   BigInt   @map("minimum_wallet_balance_minor")
+  maximumSessionAmountMinor   BigInt   @map("maximum_session_amount_minor")
+  lowBalanceWarningMinor      BigInt   @map("low_balance_warning_minor")
+  minimumTopUpAmountMinor     BigInt   @map("minimum_top_up_amount_minor")
+  maximumTopUpAmountMinor     BigInt   @map("maximum_top_up_amount_minor")
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+  version                     Int      @default(1)
+
+  @@unique([tenantId, currency])
+  @@map("payment_policy_configs")
+}
+
+model Receipt {
   id                String          @id @default(uuid()) @db.Uuid
+  tenantId          String          @map("tenant_id") @db.Uuid
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userId            String          @map("user_id") @db.Uuid
   user              User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  chargingSessionId String?         @map("charging_session_id") @db.Uuid
-  chargingSession   ChargingSession? @relation(fields: [chargingSessionId], references: [id], onDelete: SetNull)
-  idempotencyKey    String          @unique @map("idempotency_key")
-  provider          String
-  providerReference String?         @map("provider_reference")
-  amount            Decimal         @db.Decimal(12, 2)
-  currency          String          @default("BRL")
-  status            PaymentStatus   @default(PENDING)
-  metadata          Json?
+  chargingSessionId String          @unique @map("charging_session_id") @db.Uuid
+  chargingSession   ChargingSession @relation(fields: [chargingSessionId], references: [id], onDelete: Restrict)
+  paymentIntentId   String          @unique @map("payment_intent_id") @db.Uuid
+  paymentIntent     PaymentIntent   @relation(fields: [paymentIntentId], references: [id], onDelete: Restrict)
+  receiptNumber     String          @unique @map("receipt_number")
+  amountMinor       BigInt          @map("amount_minor")
+  currency          String          @default("BRL") @db.Char(3)
+  issuedAt          DateTime        @default(now()) @map("issued_at")
+  status            ReceiptStatus   @default(ISSUED)
+  snapshot          Json
   createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
-  deletedAt         DateTime?       @map("deleted_at")
-  version           Int             @default(1)
 
-  @@index([userId, status, createdAt])
-  @@index([chargingSessionId])
-  @@map("payment_transactions")
+  @@index([tenantId, userId, issuedAt])
+  @@map("receipts")
+}
+
+model Refund {
+  id                String        @id @default(uuid()) @db.Uuid
+  paymentIntentId   String        @map("payment_intent_id") @db.Uuid
+  paymentIntent     PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Restrict)
+  providerReference String?       @map("provider_reference")
+  idempotencyKey    String        @map("idempotency_key")
+  requestHash       String        @map("request_hash")
+  amountMinor       BigInt        @map("amount_minor")
+  currency          String        @default("BRL") @db.Char(3)
+  reason            String
+  status            RefundStatus  @default(PENDING)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  completedAt       DateTime?     @map("completed_at")
+
+  @@unique([paymentIntentId, idempotencyKey])
+  @@index([status, createdAt])
+  @@map("refunds")
+}
+
+model AutoRechargeRule {
+  id                  String         @id @default(uuid()) @db.Uuid
+  tenantId            String         @map("tenant_id") @db.Uuid
+  tenant              Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId              String         @map("user_id") @db.Uuid
+  user                User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  paymentMethodId     String?        @map("payment_method_id") @db.Uuid
+  paymentMethod       PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  enabled             Boolean        @default(false)
+  minimumBalanceMinor BigInt         @map("minimum_balance_minor")
+  rechargeAmountMinor BigInt         @map("recharge_amount_minor")
+  currency            String         @default("BRL") @db.Char(3)
+  lastTriggeredAt     DateTime?      @map("last_triggered_at")
+  lastFailureAt       DateTime?      @map("last_failure_at")
+  failureCount        Int            @default(0) @map("failure_count")
+  cooldownUntil       DateTime?      @map("cooldown_until")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  version             Int            @default(1)
+
+  @@unique([tenantId, userId, currency])
+  @@index([enabled, cooldownUntil])
+  @@map("auto_recharge_rules")
+}
+
+model PaymentWebhookEvent {
+  id               String                         @id @default(uuid()) @db.Uuid
+  provider         String
+  providerEventId  String                         @map("provider_event_id")
+  eventType        String                         @map("event_type")
+  payloadHash      String                         @map("payload_hash")
+  processingStatus PaymentWebhookProcessingStatus @default(RECEIVED) @map("processing_status")
+  receivedAt       DateTime                       @default(now()) @map("received_at")
+  processedAt      DateTime?                      @map("processed_at")
+  lastError        String?                        @map("last_error")
+
+  @@unique([provider, providerEventId])
+  @@index([processingStatus, receivedAt])
+  @@map("payment_webhook_events")
+}
+
+model PaymentReconciliation {
+  id                  String                      @id @default(uuid()) @db.Uuid
+  tenantId            String                      @map("tenant_id") @db.Uuid
+  tenant              Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  paymentIntentId     String                      @map("payment_intent_id") @db.Uuid
+  paymentIntent       PaymentIntent               @relation(fields: [paymentIntentId], references: [id], onDelete: Restrict)
+  status              PaymentReconciliationStatus
+  providerStatus      String?                     @map("provider_status")
+  localStatus         String                      @map("local_status")
+  providerAmountMinor BigInt?                     @map("provider_amount_minor")
+  localAmountMinor    BigInt                      @map("local_amount_minor")
+  details             Json?
+  checkedAt           DateTime                    @default(now()) @map("checked_at")
+
+  @@index([tenantId, status, checkedAt])
+  @@index([paymentIntentId, checkedAt])
+  @@map("payment_reconciliations")
 }
 
 model AuditLog {

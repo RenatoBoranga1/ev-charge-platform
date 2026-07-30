@@ -6,6 +6,8 @@ import type {
   DashboardApi,
   NearbyStationsOptions,
   PaymentsApi,
+  CreatePaymentMethodInput,
+  CreateTopUpInput,
   RoutePlannerProvider,
   StartChargingInput,
   StationsApi,
@@ -36,9 +38,15 @@ import type {
   ChargingSessionRealtimeEvent,
   ChargingSummary,
   LoginInput,
+  AutoRechargeRule,
+  ChargingReceipt,
   PaymentMethod,
+  PaymentIntent,
   RegisterInput,
   Reservation,
+  Wallet,
+  WalletTransaction,
+  WalletTransactionPage,
   RoutePlannerInput,
   RoutePlannerResult,
   Station,
@@ -181,6 +189,27 @@ export class MockUsersApi implements UsersApi {
 
 let vehicleState = [...mockVehicles];
 let paymentState = [...mockPaymentMethods];
+let walletState: Wallet = {
+  availableBalanceMinor: '29266',
+  currency: 'BRL',
+  id: 'mock-wallet',
+  reservedBalanceMinor: '0',
+  status: 'ACTIVE',
+  updatedAt: new Date().toISOString(),
+  version: 1,
+};
+let walletTransactions: WalletTransaction[] = [];
+let autoRechargeState: AutoRechargeRule = {
+  cooldownUntil: null,
+  currency: 'BRL',
+  enabled: false,
+  failureCount: 0,
+  id: null,
+  minimumBalanceMinor: '5000',
+  paymentMethodId: null,
+  rechargeAmountMinor: '10000',
+};
+const mockPaymentIntents = new Map<string, PaymentIntent & { polls?: number; credited?: boolean }>();
 let activeSession: ChargingSession | null = null;
 const processedStartKeys = new Map<string, ChargingSession>();
 const processedStopKeys = new Map<string, ChargingSummary>();
@@ -769,9 +798,37 @@ export class MockVehiclesApi implements VehiclesApi {
   }
 }
 export class MockPaymentsApi implements PaymentsApi {
+  private nextId(prefix: string): string {
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
   async list(): Promise<PaymentMethod[]> {
     await wait();
     return [...paymentState];
+  }
+
+  async createMethod(input: CreatePaymentMethodInput): Promise<PaymentMethod> {
+    await wait();
+    const method: PaymentMethod = {
+      id: this.nextId('payment-method'),
+      type: input.type === 'CARD' ? 'CREDIT_CARD' : input.type,
+      label:
+        input.type === 'CARD'
+          ? `${input.brand ?? 'Cartão'} final ${input.lastFour ?? '4242'}`
+          : input.type === 'PIX'
+            ? 'Pix'
+            : 'Carteira Solis',
+      ...(input.brand ? { brand: input.brand } : {}),
+      ...(input.lastFour ? { lastFour: input.lastFour } : {}),
+      ...(input.expirationMonth && input.expirationYear
+        ? { expiry: `${String(input.expirationMonth).padStart(2, '0')}/${String(input.expirationYear).slice(-2)}` }
+        : {}),
+      status: 'ACTIVE',
+      isDefault: input.isDefault ?? paymentState.length === 0,
+    };
+    if (method.isDefault) paymentState = paymentState.map((item) => ({ ...item, isDefault: false }));
+    paymentState = [method, ...paymentState];
+    return method;
   }
 
   async setDefault(paymentMethodId: string): Promise<PaymentMethod[]> {
@@ -788,12 +845,190 @@ export class MockPaymentsApi implements PaymentsApi {
     paymentState = paymentState.filter((method) => method.id !== paymentMethodId);
   }
 
-  async createMockPix(amount: number): Promise<{ code: string; expiresAt: string }> {
+  async getWallet(): Promise<Wallet> {
     await wait();
-    if (amount <= 0) throw new Error('Informe um valor maior que zero.');
+    return { ...walletState };
+  }
+
+  async listWalletTransactions(cursor?: string): Promise<WalletTransactionPage> {
+    await wait();
+    const start = cursor ? Number(cursor) : 0;
+    const items = walletTransactions.slice(start, start + 20);
+    const next = start + items.length;
+    return { items, nextCursor: next < walletTransactions.length ? String(next) : null };
+  }
+
+  async createTopUp(input: CreateTopUpInput): Promise<PaymentIntent> {
+    await wait();
+    if (!/^\d+$/.test(input.amountMinor) || BigInt(input.amountMinor) < 5000n) {
+      throw new Error('A recarga mínima é R$ 50,00.');
+    }
+    const replay = [...mockPaymentIntents.values()].find(
+      (intent) => intent.metadata?.scenario === `key:${input.idempotencyKey}`,
+    );
+    if (replay) {
+      if (replay.amountMinor !== input.amountMinor) {
+        throw new Error('Esta chave de idempotência já foi usada com outro valor.');
+      }
+      return { ...replay };
+    }
+    const now = new Date();
+    const id = this.nextId('payment');
+    const intent: PaymentIntent & { polls: number; credited: boolean } = {
+      amountMinor: input.amountMinor,
+      authorizedAmountMinor: '0',
+      capturedAmountMinor: '0',
+      createdAt: now.toISOString(),
+      currency: input.currency,
+      expiresAt: new Date(now.getTime() + 15 * 60_000).toISOString(),
+      id,
+      isTerminal: false,
+      metadata: {
+        copyPasteCode: `SOLIS.PIX.MOCK.${id}.${input.amountMinor}`,
+        qrPayload: `000201SOLIS${id}`,
+        scenario: `key:${input.idempotencyKey}`,
+      },
+      refundedAmountMinor: '0',
+      status: input.scenario === 'declined' ? 'FAILED' : 'PENDING',
+      type: 'WALLET_TOP_UP',
+      updatedAt: now.toISOString(),
+      polls: 0,
+      credited: false,
+    };
+    intent.isTerminal = intent.status === 'FAILED';
+    mockPaymentIntents.set(id, intent);
+    return { ...intent };
+  }
+
+  async getTopUp(paymentId: string): Promise<PaymentIntent> {
+    await wait();
+    const intent = mockPaymentIntents.get(paymentId);
+    if (!intent) throw new Error('Pagamento não encontrado.');
+    intent.polls = (intent.polls ?? 0) + 1;
+    if (intent.status === 'PENDING' && intent.polls >= 2) {
+      intent.status = 'CAPTURED';
+      intent.capturedAmountMinor = intent.amountMinor;
+      intent.isTerminal = true;
+      intent.updatedAt = new Date().toISOString();
+      if (!intent.credited) {
+        intent.credited = true;
+        walletState = {
+          ...walletState,
+          availableBalanceMinor: (
+            BigInt(walletState.availableBalanceMinor) + BigInt(intent.amountMinor)
+          ).toString(),
+          updatedAt: intent.updatedAt,
+          version: walletState.version + 1,
+        };
+        walletTransactions = [
+          {
+            amountMinor: intent.amountMinor,
+            chargingSessionId: null,
+            createdAt: intent.updatedAt,
+            currency: intent.currency,
+            description: 'Recarga Pix da carteira Solis',
+            direction: 'CREDIT',
+            id: this.nextId('wallet-transaction'),
+            paymentIntentId: intent.id,
+            status: 'POSTED',
+            type: 'TOP_UP',
+          },
+          ...walletTransactions,
+        ];
+      }
+    }
+    return { ...intent };
+  }
+
+  getPayment(paymentId: string): Promise<PaymentIntent> {
+    return this.getTopUp(paymentId);
+  }
+
+  async cancelPayment(paymentId: string): Promise<PaymentIntent> {
+    await wait();
+    const intent = mockPaymentIntents.get(paymentId);
+    if (!intent) throw new Error('Pagamento não encontrado.');
+    if (intent.status !== 'PENDING') throw new Error('Este pagamento não pode ser cancelado.');
+    intent.status = 'CANCELLED';
+    intent.isTerminal = true;
+    intent.updatedAt = new Date().toISOString();
+    return { ...intent };
+  }
+
+  async getAutoRecharge(): Promise<AutoRechargeRule> {
+    await wait();
+    return { ...autoRechargeState };
+  }
+
+  async updateAutoRecharge(
+    input: import('./contracts').UpdateAutoRechargeInput,
+  ): Promise<AutoRechargeRule> {
+    await wait();
+    if (input.enabled && !input.consentConfirmed) {
+      throw new Error('Confirme o consentimento para ativar a recarga automática.');
+    }
+    autoRechargeState = {
+      ...autoRechargeState,
+      enabled: input.enabled,
+      currency: input.currency,
+      id: autoRechargeState.id ?? this.nextId('auto-recharge'),
+      minimumBalanceMinor: input.minimumBalanceMinor,
+      paymentMethodId: input.paymentMethodId,
+      rechargeAmountMinor: input.rechargeAmountMinor,
+    };
+    return { ...autoRechargeState };
+  }
+
+  async disableAutoRecharge(): Promise<AutoRechargeRule> {
+    await wait();
+    autoRechargeState = { ...autoRechargeState, enabled: false };
+    return { ...autoRechargeState };
+  }
+
+  async createMockPix(amount: number): Promise<{ code: string; expiresAt: string }> {
+    const intent = await this.createTopUp({
+      amountMinor: String(Math.round(amount * 100)),
+      currency: 'BRL',
+      idempotencyKey: `legacy-mobile-pix-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      method: 'PIX',
+    });
+    const code = intent.metadata?.copyPasteCode;
+    if (!code || !intent.expiresAt) {
+      throw new Error('O provedor não retornou os dados do Pix.');
+    }
+    return { code, expiresAt: intent.expiresAt };
+  }
+
+  async getReceipt(chargingSessionId: string): Promise<ChargingReceipt> {
+    await wait();
+    const session = mockHistory.find((item) => item.id === chargingSessionId);
+    if (!session) throw new Error('Recibo não encontrado.');
+    const completedAt = new Date(
+      new Date(session.startedAt).getTime() + session.durationSeconds * 1000,
+    ).toISOString();
     return {
-      code: `SOLIS-PIX-MOCK-${amount.toFixed(2)}-${Date.now()}`,
-      expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+      amountMinor: String(Math.round(session.totalAmount * 100)),
+      chargingSession: {
+        completedAt,
+        connector: 'Conector de demonstração',
+        durationSeconds: session.durationSeconds,
+        energyKwh: session.energyKwh.toFixed(3),
+        id: session.id,
+        startedAt: session.startedAt,
+        station: session.stationName,
+        stoppedAt: completedAt,
+        tariffSnapshot: null,
+        vehicle: {
+          brand: 'Solis',
+          model: 'Veículo de demonstração',
+          plate: null,
+        },
+      },
+      currency: 'BRL',
+      issuedAt: completedAt,
+      payment: { id: `mock-${session.id}`, method: 'solis-wallet', reference: null, status: 'CAPTURED' },
+      receiptNumber: `SOLIS-MOCK-${session.id.slice(-6).toUpperCase()}`,
+      status: 'ISSUED',
     };
   }
 }

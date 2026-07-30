@@ -4,18 +4,48 @@ import {
   ChargerProtocol,
   ConnectorStatus,
   CurrentType,
+  LedgerAccountOwnerType,
+  LedgerAccountStatus,
+  LedgerAccountType,
+  LedgerDirection,
+  LedgerTransactionStatus,
+  LedgerTransactionType,
+  PaymentIntentStatus,
+  PaymentIntentType,
+  PaymentMethodStatus,
+  PaymentMethodType,
   PlugType,
   Prisma,
   PrismaClient,
   ProfileTheme,
+  ReceiptStatus,
+  RefundStatus,
   StationStatus,
   VehicleStatus,
   VehicleType,
+  WalletReservationStatus,
+  WalletStatus,
 } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 const ids = {
+  autoRecharge: 'b0000000-0000-4000-8000-000000000001',
+  demoSession: 'b0000000-0000-4000-8000-000000000002',
+  failedPayment: 'b0000000-0000-4000-8000-000000000003',
+  paymentMethod: 'b0000000-0000-4000-8000-000000000004',
+  pendingPayment: 'b0000000-0000-4000-8000-000000000005',
+  receipt: 'b0000000-0000-4000-8000-000000000006',
+  refund: 'b0000000-0000-4000-8000-000000000007',
+  refundedPayment: 'b0000000-0000-4000-8000-000000000008',
+  sessionPayment: 'b0000000-0000-4000-8000-000000000009',
+  topUpPayment: 'b0000000-0000-4000-8000-000000000010',
+  wallet: 'b0000000-0000-4000-8000-000000000011',
+  walletAvailable: 'b0000000-0000-4000-8000-000000000012',
+  walletClearing: 'b0000000-0000-4000-8000-000000000013',
+  walletRefund: 'b0000000-0000-4000-8000-000000000014',
+  walletReserved: 'b0000000-0000-4000-8000-000000000015',
+  walletRevenue: 'b0000000-0000-4000-8000-000000000016',
   connectorOne: 'd7d92f80-36a3-47ec-bf60-b931453bdb39',
   connectorThree: 'e6eb9afe-014b-4ec0-9601-3292b2c59191',
   connectorTwo: 'e6b90a41-ea5e-4b2f-9a73-13de0f4f9871',
@@ -254,6 +284,57 @@ async function seedStation(
   });
 }
 
+interface LedgerTransactionSeed {
+  chargingSessionId?: string;
+  entries: Array<{
+    accountId: string;
+    amountMinor: bigint;
+    direction: LedgerDirection;
+  }>;
+  id: string;
+  idempotencyKey: string;
+  paymentIntentId?: string;
+  type: LedgerTransactionType;
+}
+
+async function seedLedgerTransaction(
+  input: LedgerTransactionSeed,
+): Promise<void> {
+  const existing = await prisma.ledgerTransaction.findUnique({
+    where: {
+      tenantId_idempotencyKey: {
+        idempotencyKey: input.idempotencyKey,
+        tenantId: ids.tenant,
+      },
+    },
+  });
+  if (existing) return;
+  await prisma.ledgerTransaction.create({
+    data: {
+      chargingSessionId: input.chargingSessionId,
+      description: `Seed financeiro: ${input.type}`,
+      entries: {
+        create: input.entries.map((entry) => ({
+          accountId: entry.accountId,
+          amountMinor: entry.amountMinor,
+          currency: 'BRL',
+          direction: entry.direction,
+        })),
+      },
+      id: input.id,
+      idempotencyKey: input.idempotencyKey,
+      paymentIntentId: input.paymentIntentId,
+      requestHash: `seed-${input.idempotencyKey}`,
+      tenantId: ids.tenant,
+      type: input.type,
+    },
+  });
+  await prisma.ledgerTransaction.update({
+    data: { status: LedgerTransactionStatus.POSTED },
+    where: { id: input.id },
+  });
+}
+
 async function main(): Promise<void> {
   if (process.env.SEED_DEMO_DATA !== 'true') {
     console.info('Seed de demonstração ignorado: defina SEED_DEMO_DATA=true.');
@@ -372,6 +453,417 @@ async function main(): Promise<void> {
         : undefined,
     );
   }
+
+  await prisma.paymentPolicyConfig.upsert({
+    where: {
+      tenantId_currency: { currency: 'BRL', tenantId: ids.tenant },
+    },
+    update: {
+      lowBalanceWarningMinor: 2_000n,
+      maximumSessionAmountMinor: 50_000n,
+      maximumTopUpAmountMinor: 200_000n,
+      minimumTopUpAmountMinor: 5_000n,
+      minimumWalletBalanceMinor: 2_000n,
+      preAuthorizationAmountMinor: 5_000n,
+      version: { increment: 1 },
+    },
+    create: {
+      currency: 'BRL',
+      lowBalanceWarningMinor: 2_000n,
+      maximumSessionAmountMinor: 50_000n,
+      maximumTopUpAmountMinor: 200_000n,
+      minimumTopUpAmountMinor: 5_000n,
+      minimumWalletBalanceMinor: 2_000n,
+      preAuthorizationAmountMinor: 5_000n,
+      tenantId: ids.tenant,
+    },
+  });
+  const demoWallet = await prisma.wallet.upsert({
+    where: {
+      tenantId_userId_currency: {
+        currency: 'BRL',
+        tenantId: ids.tenant,
+        userId: ids.user,
+      },
+    },
+    update: {
+      availableBalanceMinor: 29_266n,
+      reservedBalanceMinor: 0n,
+      status: WalletStatus.ACTIVE,
+      version: { increment: 1 },
+    },
+    create: {
+      availableBalanceMinor: 29_266n,
+      currency: 'BRL',
+      id: ids.wallet,
+      reservedBalanceMinor: 0n,
+      status: WalletStatus.ACTIVE,
+      tenantId: ids.tenant,
+      userId: ids.user,
+    },
+  });
+
+  const ledgerAccounts = [
+    { accountType: LedgerAccountType.USER_WALLET_AVAILABLE, id: ids.walletAvailable, ownerId: demoWallet.id, ownerType: LedgerAccountOwnerType.USER },
+    { accountType: LedgerAccountType.USER_WALLET_RESERVED, id: ids.walletReserved, ownerId: demoWallet.id, ownerType: LedgerAccountOwnerType.USER },
+    { accountType: LedgerAccountType.PAYMENT_GATEWAY_CLEARING, id: ids.walletClearing, ownerId: ids.tenant, ownerType: LedgerAccountOwnerType.PLATFORM },
+    { accountType: LedgerAccountType.OPERATOR_REVENUE, id: ids.walletRevenue, ownerId: ids.tenant, ownerType: LedgerAccountOwnerType.PLATFORM },
+    { accountType: LedgerAccountType.REFUND_CLEARING, id: ids.walletRefund, ownerId: ids.tenant, ownerType: LedgerAccountOwnerType.PLATFORM },
+  ] as const;
+  const ledgerAccountIds = new Map<LedgerAccountType, string>();
+  for (const account of ledgerAccounts) {
+    const saved = await prisma.ledgerAccount.upsert({
+      where: {
+        tenantId_ownerType_ownerId_accountType_currency: {
+          accountType: account.accountType,
+          currency: 'BRL',
+          ownerId: account.ownerId,
+          ownerType: account.ownerType,
+          tenantId: ids.tenant,
+        },
+      },
+      update: { status: LedgerAccountStatus.ACTIVE },
+      create: {
+        ...account,
+        currency: 'BRL',
+        status: LedgerAccountStatus.ACTIVE,
+        tenantId: ids.tenant,
+      },
+    });
+    ledgerAccountIds.set(account.accountType, saved.id);
+  }
+  const ledgerAccountId = (type: LedgerAccountType): string => {
+    const id = ledgerAccountIds.get(type);
+    if (!id) throw new Error(`Conta de ledger ausente no seed: ${type}`);
+    return id;
+  };
+
+  const demoStartedAt = new Date('2026-07-28T16:00:00.000Z');
+  const demoCompletedAt = new Date('2026-07-28T16:24:00.000Z');
+  await prisma.chargingSession.upsert({
+    where: { id: ids.demoSession },
+    update: {
+      completedAt: demoCompletedAt,
+      energyKwh: '6.172',
+      estimatedCost: '12.34',
+      meterStartWh: 100_000n,
+      meterStopWh: 106_172n,
+      startedAt: demoStartedAt,
+      status: 'COMPLETED',
+      stoppedAt: demoCompletedAt,
+      totalAmount: '12.34',
+    },
+    create: {
+      chargePointId: stations[0]!.chargePointId,
+      completedAt: demoCompletedAt,
+      connectorId: ids.connectorOne,
+      energyKwh: '6.172',
+      estimatedCost: '12.34',
+      evseId: ids.evseOne,
+      id: ids.demoSession,
+      idempotencyKey: 'seed-financial-session',
+      meterStartWh: 100_000n,
+      meterStopWh: 106_172n,
+      startedAt: demoStartedAt,
+      stationId: ids.stationOne,
+      status: 'COMPLETED',
+      stoppedAt: demoCompletedAt,
+      tariffId: '70707070-7070-4070-8070-707070707070',
+      tariffSnapshot: {
+        activationFee: 0,
+        currency: 'BRL',
+        initialBatteryPercent: 30,
+        name: 'Tarifa demonstrativa congelada',
+        parkingFeeHour: 0,
+        pricePerKwh: 2,
+      },
+      totalAmount: '12.34',
+      userId: ids.user,
+      vehicleId: ids.vehicle,
+    },
+  });
+  await prisma.paymentMethod.upsert({
+    where: { id: ids.paymentMethod },
+    update: {
+      isDefault: true,
+      status: PaymentMethodStatus.ACTIVE,
+    },
+    create: {
+      brand: 'Solis Test',
+      expirationMonth: 12,
+      expirationYear: 2099,
+      id: ids.paymentMethod,
+      isDefault: true,
+      lastFour: '4242',
+      provider: 'solis-mock',
+      providerToken: 'mock_seed_token_not_a_real_card',
+      status: PaymentMethodStatus.ACTIVE,
+      tenantId: ids.tenant,
+      type: PaymentMethodType.CARD,
+      userId: ids.user,
+    },
+  });
+  await prisma.autoRechargeRule.upsert({
+    where: {
+      tenantId_userId_currency: {
+        currency: 'BRL',
+        tenantId: ids.tenant,
+        userId: ids.user,
+      },
+    },
+    update: {
+      enabled: false,
+      minimumBalanceMinor: 5_000n,
+      paymentMethodId: ids.paymentMethod,
+      rechargeAmountMinor: 10_000n,
+      version: { increment: 1 },
+    },
+    create: {
+      currency: 'BRL',
+      enabled: false,
+      id: ids.autoRecharge,
+      minimumBalanceMinor: 5_000n,
+      paymentMethodId: ids.paymentMethod,
+      rechargeAmountMinor: 10_000n,
+      tenantId: ids.tenant,
+      userId: ids.user,
+    },
+  });
+
+  const paymentIntents: Prisma.PaymentIntentUncheckedCreateInput[] = [
+    {
+      amountMinor: 30_000n,
+      authorizedAmountMinor: 30_000n,
+      capturedAmountMinor: 30_000n,
+      currency: 'BRL',
+      id: ids.topUpPayment,
+      idempotencyKey: 'seed-top-up-completed',
+      provider: 'solis-mock',
+      providerReference: 'mock_seed_topup_completed',
+      requestHash: 'seed-top-up-completed',
+      status: PaymentIntentStatus.CAPTURED,
+      tenantId: ids.tenant,
+      type: PaymentIntentType.WALLET_TOP_UP,
+      userId: ids.user,
+    },
+    {
+      amountMinor: 5_000n,
+      authorizedAmountMinor: 5_000n,
+      capturedAmountMinor: 1_234n,
+      chargingSessionId: ids.demoSession,
+      currency: 'BRL',
+      id: ids.sessionPayment,
+      idempotencyKey: 'seed-session-payment',
+      provider: 'solis-wallet',
+      providerReference: 'wallet_seed_session',
+      requestHash: 'seed-session-payment',
+      status: PaymentIntentStatus.CAPTURED,
+      tenantId: ids.tenant,
+      type: PaymentIntentType.CHARGING_AUTHORIZATION,
+      userId: ids.user,
+    },
+    {
+      amountMinor: 10_000n,
+      currency: 'BRL',
+      expiresAt: new Date('2099-12-31T23:59:59.000Z'),
+      id: ids.pendingPayment,
+      idempotencyKey: 'seed-pix-pending',
+      provider: 'solis-mock',
+      providerReference: 'mock_seed_pix_pending',
+      requestHash: 'seed-pix-pending',
+      status: PaymentIntentStatus.PENDING,
+      tenantId: ids.tenant,
+      type: PaymentIntentType.WALLET_TOP_UP,
+      userId: ids.user,
+    },
+    {
+      amountMinor: 5_000n,
+      currency: 'BRL',
+      id: ids.failedPayment,
+      idempotencyKey: 'seed-payment-failed',
+      provider: 'solis-mock',
+      providerReference: 'mock_seed_payment_failed',
+      requestHash: 'seed-payment-failed',
+      status: PaymentIntentStatus.FAILED,
+      tenantId: ids.tenant,
+      type: PaymentIntentType.WALLET_TOP_UP,
+      userId: ids.user,
+    },
+    {
+      amountMinor: 500n,
+      authorizedAmountMinor: 500n,
+      capturedAmountMinor: 500n,
+      currency: 'BRL',
+      id: ids.refundedPayment,
+      idempotencyKey: 'seed-payment-refunded',
+      provider: 'solis-mock',
+      providerReference: 'mock_seed_payment_refunded',
+      refundedAmountMinor: 500n,
+      requestHash: 'seed-payment-refunded',
+      status: PaymentIntentStatus.REFUNDED,
+      tenantId: ids.tenant,
+      type: PaymentIntentType.REFUND,
+      userId: ids.user,
+    },
+  ];
+  for (const payment of paymentIntents) {
+    await prisma.paymentIntent.upsert({
+      where: { id: payment.id },
+      update: {
+        authorizedAmountMinor: payment.authorizedAmountMinor,
+        capturedAmountMinor: payment.capturedAmountMinor,
+        expiresAt: payment.expiresAt,
+        refundedAmountMinor: payment.refundedAmountMinor,
+        status: payment.status,
+      },
+      create: payment,
+    });
+  }
+  await prisma.walletReservation.upsert({
+    where: { chargingSessionId: ids.demoSession },
+    update: {
+      amountMinor: 5_000n,
+      capturedMinor: 1_234n,
+      completedAt: demoCompletedAt,
+      releasedMinor: 3_766n,
+      status: WalletReservationStatus.CAPTURED,
+      version: { increment: 1 },
+    },
+    create: {
+      amountMinor: 5_000n,
+      capturedMinor: 1_234n,
+      chargingSessionId: ids.demoSession,
+      completedAt: demoCompletedAt,
+      currency: 'BRL',
+      idempotencyKey: 'seed-session-reservation',
+      paymentIntentId: ids.sessionPayment,
+      releasedMinor: 3_766n,
+      requestHash: 'seed-session-reservation',
+      status: WalletReservationStatus.CAPTURED,
+      walletId: demoWallet.id,
+    },
+  });
+  await prisma.receipt.upsert({
+    where: { chargingSessionId: ids.demoSession },
+    update: {
+      amountMinor: 1_234n,
+      status: ReceiptStatus.ISSUED,
+    },
+    create: {
+      amountMinor: 1_234n,
+      chargingSessionId: ids.demoSession,
+      currency: 'BRL',
+      id: ids.receipt,
+      issuedAt: demoCompletedAt,
+      paymentIntentId: ids.sessionPayment,
+      receiptNumber: 'SOLIS-2026-SEED000000000001',
+      snapshot: {
+        connector: 'SOLIS-001-A',
+        durationSeconds: 1440,
+        energyKwh: '6.172',
+        station: 'Solis Centro',
+        vehicle: 'Aurora E1 Touring',
+      },
+      status: ReceiptStatus.ISSUED,
+      tenantId: ids.tenant,
+      userId: ids.user,
+    },
+  });
+  await prisma.refund.upsert({
+    where: {
+      paymentIntentId_idempotencyKey: {
+        idempotencyKey: 'seed-refund-completed',
+        paymentIntentId: ids.refundedPayment,
+      },
+    },
+    update: {
+      completedAt: demoCompletedAt,
+      status: RefundStatus.COMPLETED,
+    },
+    create: {
+      amountMinor: 500n,
+      completedAt: demoCompletedAt,
+      currency: 'BRL',
+      id: ids.refund,
+      idempotencyKey: 'seed-refund-completed',
+      paymentIntentId: ids.refundedPayment,
+      providerReference: 'mock_seed_refund_completed',
+      reason: 'Estorno demonstrativo',
+      requestHash: 'seed-refund-completed',
+      status: RefundStatus.COMPLETED,
+    },
+  });
+
+  await seedLedgerTransaction({
+    entries: [
+      { accountId: ledgerAccountId(LedgerAccountType.PAYMENT_GATEWAY_CLEARING), amountMinor: 30_000n, direction: LedgerDirection.DEBIT },
+      { accountId: ledgerAccountId(LedgerAccountType.USER_WALLET_AVAILABLE), amountMinor: 30_000n, direction: LedgerDirection.CREDIT },
+    ],
+    id: 'b1000000-0000-4000-8000-000000000001',
+    idempotencyKey: 'seed-ledger-top-up',
+    paymentIntentId: ids.topUpPayment,
+    type: LedgerTransactionType.TOP_UP,
+  });
+  await seedLedgerTransaction({
+    chargingSessionId: ids.demoSession,
+    entries: [
+      { accountId: ledgerAccountId(LedgerAccountType.USER_WALLET_AVAILABLE), amountMinor: 5_000n, direction: LedgerDirection.DEBIT },
+      { accountId: ledgerAccountId(LedgerAccountType.USER_WALLET_RESERVED), amountMinor: 5_000n, direction: LedgerDirection.CREDIT },
+    ],
+    id: 'b1000000-0000-4000-8000-000000000002',
+    idempotencyKey: 'seed-ledger-authorization',
+    paymentIntentId: ids.sessionPayment,
+    type: LedgerTransactionType.AUTHORIZATION,
+  });
+  await seedLedgerTransaction({
+    chargingSessionId: ids.demoSession,
+    entries: [
+      { accountId: ledgerAccountId(LedgerAccountType.USER_WALLET_RESERVED), amountMinor: 1_234n, direction: LedgerDirection.DEBIT },
+      { accountId: ledgerAccountId(LedgerAccountType.OPERATOR_REVENUE), amountMinor: 1_234n, direction: LedgerDirection.CREDIT },
+    ],
+    id: 'b1000000-0000-4000-8000-000000000003',
+    idempotencyKey: 'seed-ledger-capture',
+    paymentIntentId: ids.sessionPayment,
+    type: LedgerTransactionType.CAPTURE,
+  });
+  await seedLedgerTransaction({
+    chargingSessionId: ids.demoSession,
+    entries: [
+      { accountId: ledgerAccountId(LedgerAccountType.USER_WALLET_RESERVED), amountMinor: 3_766n, direction: LedgerDirection.DEBIT },
+      { accountId: ledgerAccountId(LedgerAccountType.USER_WALLET_AVAILABLE), amountMinor: 3_766n, direction: LedgerDirection.CREDIT },
+    ],
+    id: 'b1000000-0000-4000-8000-000000000004',
+    idempotencyKey: 'seed-ledger-release',
+    paymentIntentId: ids.sessionPayment,
+    type: LedgerTransactionType.RELEASE,
+  });
+  await seedLedgerTransaction({
+    entries: [
+      { accountId: ledgerAccountId(LedgerAccountType.REFUND_CLEARING), amountMinor: 500n, direction: LedgerDirection.DEBIT },
+      { accountId: ledgerAccountId(LedgerAccountType.USER_WALLET_AVAILABLE), amountMinor: 500n, direction: LedgerDirection.CREDIT },
+    ],
+    id: 'b1000000-0000-4000-8000-000000000005',
+    idempotencyKey: 'seed-ledger-refund',
+    paymentIntentId: ids.refundedPayment,
+    type: LedgerTransactionType.REFUND,
+  });
+
+  await prisma.meterValue.upsert({
+    where: {
+      chargingSessionId_sampledAt: {
+        chargingSessionId: ids.demoSession,
+        sampledAt: demoCompletedAt,
+      },
+    },
+    update: { energyKwh: '6.172', meterWh: 106_172n, powerKw: 0 },
+    create: {
+      chargingSessionId: ids.demoSession,
+      energyKwh: '6.172',
+      meterWh: 106_172n,
+      powerKw: 0,
+      sampledAt: demoCompletedAt,
+    },
+  });
   console.info('Seed Solis concluído.');
 }
 

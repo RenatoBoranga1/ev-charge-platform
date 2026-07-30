@@ -18,8 +18,10 @@
     "dev:simulator": "pnpm --filter @solis/charger-simulator dev",
     "e2e:charging": "node scripts/e2e-charging-flow.mjs",
     "e2e:ocpp": "node scripts/e2e-ocpp-flow.mjs",
+    "e2e:payments": "node scripts/e2e-payments-flow.mjs",
     "db:generate": "pnpm --filter @solis/database prisma:generate",
     "db:migrate": "pnpm --filter @solis/database migrate:deploy",
+    "db:status": "pnpm --filter @solis/database migrate:status",
     "db:seed": "pnpm --filter @solis/database seed",
     "postinstall": "pnpm --filter @solis/database prisma:generate"
   },

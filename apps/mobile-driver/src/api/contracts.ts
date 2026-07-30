@@ -12,6 +12,11 @@ import type {
   ChargingSession,
   ChargingSessionRealtimeEvent,
   ChargingSummary,
+  AutoRechargeRule,
+  ChargingReceipt,
+  PaymentIntent,
+  Wallet,
+  WalletTransactionPage,
   PaymentMethod,
   Reservation,
   RoutePlannerInput,
@@ -100,11 +105,48 @@ export interface VehiclesApi {
   remove(vehicleId: string, recordVersion: number): Promise<void>;
 }
 
+export interface CreatePaymentMethodInput {
+  brand?: string;
+  expirationMonth?: number;
+  expirationYear?: number;
+  isDefault?: boolean;
+  lastFour?: string;
+  type: 'CARD' | 'PIX' | 'WALLET';
+}
+
+export interface CreateTopUpInput {
+  amountMinor: string;
+  currency: 'BRL';
+  idempotencyKey: string;
+  method: 'PIX';
+  scenario?: 'approved' | 'pending' | 'declined' | 'timeout' | 'expired' | 'delayed-confirmation';
+}
+
+export interface UpdateAutoRechargeInput {
+  consentConfirmed: boolean;
+  currency: 'BRL';
+  enabled: boolean;
+  minimumBalanceMinor: string;
+  paymentMethodId: string;
+  rechargeAmountMinor: string;
+}
+
 export interface PaymentsApi {
   list(): Promise<PaymentMethod[]>;
+  createMethod(input: CreatePaymentMethodInput): Promise<PaymentMethod>;
   setDefault(paymentMethodId: string): Promise<PaymentMethod[]>;
   remove(paymentMethodId: string): Promise<void>;
+  getWallet(): Promise<Wallet>;
+  listWalletTransactions(cursor?: string): Promise<WalletTransactionPage>;
+  createTopUp(input: CreateTopUpInput): Promise<PaymentIntent>;
+  getTopUp(paymentId: string): Promise<PaymentIntent>;
+  getPayment(paymentId: string): Promise<PaymentIntent>;
+  cancelPayment(paymentId: string): Promise<PaymentIntent>;
+  getAutoRecharge(): Promise<AutoRechargeRule>;
+  updateAutoRecharge(input: UpdateAutoRechargeInput): Promise<AutoRechargeRule>;
+  disableAutoRecharge(): Promise<AutoRechargeRule>;
   createMockPix(amount: number): Promise<{ code: string; expiresAt: string }>;
+  getReceipt(chargingSessionId: string): Promise<ChargingReceipt>;
 }
 
 export interface RoutePlannerProvider {

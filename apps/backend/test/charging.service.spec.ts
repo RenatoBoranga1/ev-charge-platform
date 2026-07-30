@@ -14,6 +14,7 @@ describe('ChargingService', () => {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
 
   beforeEach(() => validateConnector.mockReset());

@@ -18,6 +18,8 @@ import { IdempotencyService } from '../common/idempotency.service';
 import { environment } from '../config/environment';
 import { PrismaService } from '../database/prisma.service';
 import { DomainEventPublisher } from '../outbox/domain-event-publisher';
+import { ChargingPaymentPolicy } from '../payments/charging/charging-payment.policy';
+import { Money } from '../payments/money';
 import { StationsService } from '../stations/stations.service';
 import {
   chargingSessionInclude,
@@ -64,6 +66,7 @@ export class ChargingService implements OnModuleInit, OnModuleDestroy {
     private readonly chargerGateway: ChargerGateway,
     private readonly realtime: ChargingRealtimeGateway,
     private readonly chargerEvents: ChargerEventRelay,
+    private readonly paymentPolicy: ChargingPaymentPolicy,
   ) {}
 
   onModuleInit(): void {
@@ -234,17 +237,49 @@ export class ChargingService implements OnModuleInit, OnModuleDestroy {
                 },
                 tx,
               );
+              return pending;
+            },
+            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          );
+          try {
+            const tariff = readTariffSnapshot(session.tariffSnapshot);
+            await this.paymentPolicy.authorize(
+              {
+                chargingSessionId: session.id,
+                currency: tariff.currency,
+              },
+              user,
+              idempotencyKey,
+              correlationId,
+            );
+            const authorized = await this.prisma.$transaction(async (tx) => {
+              const current = await tx.chargingSession.findUniqueOrThrow({
+                include: chargingSessionInclude,
+                where: { id: session.id },
+              });
+              if (current.status === ChargingSessionStatus.AUTHORIZED) {
+                return current;
+              }
               return this.transition(
                 tx,
-                pending,
+                current,
                 ChargingSessionStatus.AUTHORIZED,
                 user,
                 correlationId,
               );
-            },
-            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-          );
-          return toChargingSessionDto(session);
+            });
+            return toChargingSessionDto(authorized);
+          } catch (error) {
+            await this.failSession(
+              session.id,
+              user,
+              correlationId,
+              error instanceof Error
+                ? error.message
+                : 'Falha na autorizacao financeira.',
+            );
+            throw error;
+          }
         } catch (error) {
           if (
             error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -661,7 +696,7 @@ export class ChargingService implements OnModuleInit, OnModuleDestroy {
     correlationId: string,
     meterStopWh: bigint,
   ): Promise<ChargingSessionRecord> {
-    return this.prisma.$transaction(async (tx) => {
+    const completed = await this.prisma.$transaction(async (tx) => {
       const current = await tx.chargingSession.findUnique({
         include: chargingSessionInclude,
         where: { id: sessionId },
@@ -717,6 +752,19 @@ export class ChargingService implements OnModuleInit, OnModuleDestroy {
       });
       return completed;
     });
+    const tariff = readTariffSnapshot(completed.tariffSnapshot);
+    await this.paymentPolicy.settle(
+      {
+        chargingSessionId: completed.id,
+        currency: tariff.currency,
+      },
+      Money.fromDecimal(completed.totalAmount, tariff.currency, {
+        maximumAmountMinor: environment.maximumMoneyMinor,
+      }),
+      user,
+      correlationId,
+    );
+    return completed;
   }
 
   private async markRecoverableDisconnect(
@@ -843,6 +891,7 @@ export class ChargingService implements OnModuleInit, OnModuleDestroy {
         },
       );
     });
+    await this.paymentPolicy.cancel(sessionId, user, correlationId);
     this.realtime.publish(toChargingSessionMetrics(failed));
     return failed;
   }

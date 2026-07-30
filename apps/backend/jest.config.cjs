@@ -18,6 +18,10 @@ module.exports = {
     'src/charging/gateway/ocpp16-charger.gateway.ts',
     'src/charging/gateway/routing-charger.gateway.ts',
     'src/ocpp/*.ts',
+    'src/payments/**/*.ts',
+    '!src/payments/**/*.controller.ts',
+    '!src/payments/**/*.module.ts',
+    '!src/payments/**/dto/*.ts',
   ],
   coverageDirectory: 'coverage',
   coverageThreshold: {
@@ -26,6 +30,12 @@ module.exports = {
       branches: 70,
       functions: 75,
       lines: 80,
+    },
+    './src/payments/money/**/*.ts': {
+      statements: 95,
+      branches: 90,
+      functions: 95,
+      lines: 95,
     },
   },
 };

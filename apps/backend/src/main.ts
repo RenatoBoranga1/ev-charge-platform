@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { Request, Response } from 'express';
 
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { environment } from './config/environment';
@@ -14,7 +15,13 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: environment.corsOrigins,
   });
-  app.useBodyParser('json', { limit: environment.httpPayloadLimit });
+  app.useBodyParser('json', {
+    limit: environment.httpPayloadLimit,
+    verify(request: Request, _response: Response, buffer: Buffer) {
+      (request as typeof request & { rawBody?: Buffer }).rawBody =
+        Buffer.from(buffer);
+    },
+  });
   app.useGlobalFilters(new ApiExceptionFilter());
   app.useGlobalPipes(
     new ValidationPipe({
