@@ -47,6 +47,9 @@ jobs:
       JWT_ACCESS_SECRET: ci-secret-at-least-32-characters-long
       HISTORY_CURSOR_SECRET: ci-history-cursor-secret-at-least-32-characters
       OCPP_DEMO_PASSWORD: solis-ocpp-demo
+      PAYMENT_RECONCILIATION_ENABLED: "false"
+      PAYMENT_WEBHOOK_SECRET: ci-payment-webhook-secret-at-least-32-characters
+      PAYMENTS_MODE: mock
       REDIS_URL: redis://localhost:6379
       RUN_DB_TESTS: "true"
       SEED_DEMO_DATA: "true"
