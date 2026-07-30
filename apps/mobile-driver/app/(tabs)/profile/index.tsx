@@ -137,9 +137,14 @@ export default function ProfileScreen() {
           onPress={() => router.push('/(tabs)/profile/support')}
         />
         <ProfileMenuRow
+          icon="wallet-outline"
+          label="Carteira Solis"
+          onPress={() => router.push('/(tabs)/profile/wallet' as never)}
+        />
+        <ProfileMenuRow
           icon="card-outline"
           label="Pagamentos"
-          onPress={() => router.push('/(tabs)/profile/payment-methods')}
+          onPress={() => router.push('/(tabs)/profile/payment-center' as never)}
         />
         <ProfileMenuRow
           icon="time-outline"

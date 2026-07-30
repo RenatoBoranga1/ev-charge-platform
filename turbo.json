@@ -18,7 +18,13 @@
       "outputs": []
     },
     "test": {
-      "env": ["DATABASE_URL", "RUN_DB_TESTS"],
+      "env": [
+        "DATABASE_URL",
+        "PAYMENTS_MODE",
+        "PAYMENT_WEBHOOK_SECRET",
+        "REDIS_URL",
+        "RUN_DB_TESTS"
+      ],
       "outputs": ["coverage/**"]
     }
   }

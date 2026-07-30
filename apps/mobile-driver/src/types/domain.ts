@@ -116,6 +116,119 @@ export interface PaymentMethod {
   balance?: number;
 }
 
+export interface Wallet {
+  availableBalanceMinor: string;
+  currency: string;
+  id: string;
+  reservedBalanceMinor: string;
+  status: 'ACTIVE' | 'BLOCKED' | 'CLOSED';
+  updatedAt: string;
+  version: number;
+}
+
+export type WalletTransactionType =
+  | 'TOP_UP'
+  | 'AUTHORIZATION'
+  | 'CAPTURE'
+  | 'RELEASE'
+  | 'REFUND'
+  | 'ADJUSTMENT'
+  | 'AUTO_RECHARGE'
+  | 'REVERSAL';
+
+export interface WalletTransaction {
+  amountMinor: string;
+  chargingSessionId: string | null;
+  createdAt: string;
+  currency: string;
+  description: string;
+  direction: 'CREDIT' | 'DEBIT';
+  id: string;
+  paymentIntentId: string | null;
+  status: 'PENDING' | 'POSTED' | 'REVERSED' | 'FAILED';
+  type: WalletTransactionType;
+}
+
+export interface WalletTransactionPage {
+  items: WalletTransaction[];
+  nextCursor: string | null;
+}
+
+export type PaymentIntentStatus =
+  | 'CREATED'
+  | 'PENDING'
+  | 'REQUIRES_ACTION'
+  | 'AUTHORIZED'
+  | 'PROCESSING'
+  | 'CAPTURED'
+  | 'CANCELLED'
+  | 'EXPIRED'
+  | 'FAILED'
+  | 'REQUIRES_REVIEW'
+  | 'REFUNDED'
+  | 'PARTIALLY_REFUNDED';
+
+export interface PaymentIntent {
+  amountMinor: string;
+  authorizedAmountMinor: string;
+  capturedAmountMinor: string;
+  createdAt: string;
+  currency: string;
+  expiresAt: string | null;
+  id: string;
+  isTerminal: boolean;
+  metadata: {
+    copyPasteCode?: string;
+    qrPayload?: string;
+    scenario?: string;
+  } | null;
+  refundedAmountMinor: string;
+  status: PaymentIntentStatus;
+  type: string;
+  updatedAt: string;
+}
+
+export interface AutoRechargeRule {
+  cooldownUntil: string | null;
+  currency: string;
+  enabled: boolean;
+  failureCount: number;
+  id: string | null;
+  minimumBalanceMinor: string;
+  paymentMethodId: string | null;
+  rechargeAmountMinor: string;
+}
+
+export interface ChargingReceipt {
+  amountMinor: string;
+  chargingSession: {
+    completedAt: string | null;
+    connector: string;
+    durationSeconds: number;
+    energyKwh: string;
+    id: string;
+    startedAt: string | null;
+    station: string;
+    stoppedAt: string | null;
+    tariffSnapshot: unknown;
+    vehicle: {
+      brand: string;
+      model: string;
+      plate: string | null;
+    };
+  };
+  currency: string;
+  issuedAt: string;
+  payment: {
+    id: string;
+    method: string;
+    reference: string | null;
+    status: string;
+  };
+  receiptNumber: string;
+  status: 'ISSUED' | 'PARTIALLY_REFUNDED' | 'REFUNDED';
+}
+
 export interface ValidatedConnector {
   station: Station;
   connector: Connector;

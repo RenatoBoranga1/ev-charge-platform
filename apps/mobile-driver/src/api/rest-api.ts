@@ -7,6 +7,8 @@ import type {
   NearbyStationsOptions,
   PaymentsApi,
   RoutePlannerProvider,
+  CreatePaymentMethodInput,
+  CreateTopUpInput,
   StartChargingInput,
   StationsApi,
   UsersApi,
@@ -15,8 +17,10 @@ import type {
 import { tokenStorage } from '@/auth/token-storage';
 import { AppLogger } from '@/logging/AppLogger';
 import type {
+  AutoRechargeRule,
   AuthSession,
   AuthTokens,
+  ChargingReceipt,
   ChargingHistoryFilters,
   ChargingHistoryPage,
   ChargingSessionDetails,
@@ -29,6 +33,9 @@ import type {
   ChargingSummary,
   LoginInput,
   PaymentMethod,
+  PaymentIntent,
+  Wallet,
+  WalletTransactionPage,
   RegisterInput,
   Reservation,
   RoutePlannerInput,
@@ -407,30 +414,140 @@ class RestVehiclesApi implements VehiclesApi {
   }
 }
 
+interface PaymentMethodResponse {
+  brand: string | null;
+  expirationMonth: number | null;
+  expirationYear: number | null;
+  id: string;
+  isDefault: boolean;
+  lastFour: string | null;
+  status: 'ACTIVE' | 'BLOCKED' | 'EXPIRED' | 'REMOVED';
+  type: 'CARD' | 'PIX' | 'WALLET';
+}
+
+function toPaymentMethod(method: PaymentMethodResponse): PaymentMethod {
+  return {
+    id: method.id,
+    type: method.type === 'CARD' ? 'CREDIT_CARD' : method.type,
+    label:
+      method.type === 'CARD'
+        ? `${method.brand ?? 'Cartão'} final ${method.lastFour ?? '••••'}`
+        : method.type === 'PIX'
+          ? 'Pix'
+          : 'Carteira Solis',
+    ...(method.brand ? { brand: method.brand } : {}),
+    ...(method.lastFour ? { lastFour: method.lastFour } : {}),
+    ...(method.expirationMonth && method.expirationYear
+      ? {
+          expiry: `${String(method.expirationMonth).padStart(2, '0')}/${String(
+            method.expirationYear,
+          ).slice(-2)}`,
+        }
+      : {}),
+    status:
+      method.status === 'ACTIVE'
+        ? 'ACTIVE'
+        : method.status === 'EXPIRED'
+          ? 'DISABLED'
+          : 'DISABLED',
+    isDefault: method.isDefault,
+  };
+}
+
 class RestPaymentsApi implements PaymentsApi {
   constructor(private readonly client: RestClient) {}
 
-  list(): Promise<PaymentMethod[]> {
-    return this.client.request<PaymentMethod[]>('/v1/payment-methods');
+  async list(): Promise<PaymentMethod[]> {
+    const methods = await this.client.request<PaymentMethodResponse[]>(
+      '/v1/users/me/payment-methods',
+    );
+    return methods.map(toPaymentMethod);
   }
 
-  setDefault(paymentMethodId: string): Promise<PaymentMethod[]> {
-    return this.client.request<PaymentMethod[]>(`/v1/payment-methods/${paymentMethodId}/default`, {
-      method: 'POST',
-    });
+  async createMethod(input: CreatePaymentMethodInput): Promise<PaymentMethod> {
+    const method = await this.client.request<PaymentMethodResponse>(
+      '/v1/users/me/payment-methods',
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return toPaymentMethod(method);
+  }
+
+  async setDefault(paymentMethodId: string): Promise<PaymentMethod[]> {
+    const methods = await this.client.request<PaymentMethodResponse[]>(
+      `/v1/users/me/payment-methods/${paymentMethodId}/default`,
+      { method: 'PATCH' },
+    );
+    return methods.map(toPaymentMethod);
   }
 
   async remove(paymentMethodId: string): Promise<void> {
-    await this.client.request<void>(`/v1/payment-methods/${paymentMethodId}`, {
+    await this.client.request<void>(`/v1/users/me/payment-methods/${paymentMethodId}`, {
       method: 'DELETE',
     });
   }
 
-  createMockPix(amount: number): Promise<{ code: string; expiresAt: string }> {
-    return this.client.request('/v1/payments/pix', {
+  getWallet(): Promise<Wallet> {
+    return this.client.request('/v1/users/me/wallet');
+  }
+
+  listWalletTransactions(cursor?: string): Promise<WalletTransactionPage> {
+    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    return this.client.request(`/v1/users/me/wallet/transactions${query}`);
+  }
+
+  createTopUp(input: CreateTopUpInput): Promise<PaymentIntent> {
+    return this.client.request('/v1/users/me/wallet/top-ups', {
       method: 'POST',
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify(input),
     });
+  }
+
+  getTopUp(paymentId: string): Promise<PaymentIntent> {
+    return this.client.request(`/v1/users/me/wallet/top-ups/${paymentId}`);
+  }
+
+  getPayment(paymentId: string): Promise<PaymentIntent> {
+    return this.client.request(`/v1/users/me/payments/${paymentId}`);
+  }
+
+  cancelPayment(paymentId: string): Promise<PaymentIntent> {
+    return this.client.request(`/v1/users/me/payments/${paymentId}/cancel`, { method: 'POST' });
+  }
+
+  getAutoRecharge(): Promise<AutoRechargeRule> {
+    return this.client.request('/v1/users/me/wallet/auto-recharge');
+  }
+
+  updateAutoRecharge(input: import('./contracts').UpdateAutoRechargeInput): Promise<AutoRechargeRule> {
+    return this.client.request('/v1/users/me/wallet/auto-recharge', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  }
+
+  disableAutoRecharge(): Promise<AutoRechargeRule> {
+    return this.client.request('/v1/users/me/wallet/auto-recharge', { method: 'DELETE' });
+  }
+
+  async createMockPix(amount: number): Promise<{ code: string; expiresAt: string }> {
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error('Informe um valor válido.');
+    const intent = await this.createTopUp({
+      amountMinor: String(Math.round(amount * 100)),
+      currency: 'BRL',
+      idempotencyKey: `legacy-mobile-pix-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      method: 'PIX',
+    });
+    const code = intent.metadata?.copyPasteCode;
+    if (!code || !intent.expiresAt) {
+      throw new Error('O provedor não retornou os dados do Pix.');
+    }
+    return { code, expiresAt: intent.expiresAt };
+  }
+
+  getReceipt(chargingSessionId: string): Promise<ChargingReceipt> {
+    return this.client.request(
+      `/v1/users/me/charging-sessions/${chargingSessionId}/receipt`,
+    );
   }
 }
 

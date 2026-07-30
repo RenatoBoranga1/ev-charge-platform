@@ -87,6 +87,21 @@ O seed de demonstração só é executado quando `SEED_DEMO_DATA=true`. No Compo
 - `POST /v1/charging-sessions/:id/start`
 - `POST /v1/charging-sessions/:id/stop`
 - `GET /v1/charging-sessions/:id/metrics`
+- `GET /v1/users/me/wallet`
+- `GET /v1/users/me/wallet/transactions`
+- `POST /v1/users/me/wallet/top-ups`
+- `GET /v1/users/me/wallet/top-ups/:id`
+- `POST /v1/users/me/wallet/top-ups/:id/cancel`
+- `GET /v1/users/me/payments`
+- `GET /v1/users/me/payments/:id`
+- `POST /v1/users/me/payments/:id/cancel`
+- `GET /v1/users/me/payment-methods`
+- `POST /v1/users/me/payment-methods`
+- `PATCH /v1/users/me/payment-methods/:id/default`
+- `DELETE /v1/users/me/payment-methods/:id`
+- `GET|PUT|DELETE /v1/users/me/wallet/auto-recharge`
+- `GET /v1/users/me/charging-sessions/:id/receipt`
+- `POST /v1/webhooks/payments/:provider`
 
 Perfil e garagem usam optimistic locking por `recordVersion`, soft delete,
 auditoria e Outbox. O PostgreSQL garante um único veículo principal ativo por
@@ -171,6 +186,30 @@ O seed registra `SOLIS-OCPP-001` com senha definida por `OCPP_DEMO_PASSWORD`. Pa
 
 O E2E OCPP conecta com `ocpp1.6`, executa boot/heartbeat/status, recebe start remoto, autoriza e inicia a transacao, envia medidores, recebe stop remoto e conclui a mesma `ChargingSession`. A decisao e os limites estao em `docs/architecture/ocpp-16-adapter.md`.
 
+## Carteira e pagamentos
+
+A carteira Solis usa ledger de partidas dobradas, valores `bigint` em unidades
+mínimas, transações PostgreSQL `SERIALIZABLE`, locks, optimistic locking e
+idempotência vinculada ao payload. Um trigger impede lançamentos
+desbalanceados e lançamentos contabilizados são imutáveis.
+
+O adaptador atual é `MockPaymentGateway` e só opera com `PAYMENTS_MODE=mock`.
+Pix credita saldo exclusivamente após webhook HMAC confirmado; duplicação,
+concorrência, timeout e repetição com payload divergente são tratadas sem
+duplicar crédito. A recarga de sessão reserva saldo, captura o custo final,
+libera o excedente e emite recibo seguro. Recarga automática exige consentimento
+explícito, lock Redis e cooldown.
+
+Para executar o fluxo financeiro completo:
+
+    docker compose up --build -d
+    pnpm e2e:payments
+
+O E2E valida criação concorrente, idempotência, webhook duplicado, crédito
+único, extrato, recibo e consentimento. Consulte
+`docs/architecture/payments-wallet-phase5.md` para invariantes, endpoints e
+limitações.
+
 ## Limitacoes atuais
 
 - O adaptador cobre o recorte minimo solicitado de OCPP 1.6J, nao e uma implementacao completa nem certificada pela Open Charge Alliance.
@@ -180,6 +219,6 @@ O E2E OCPP conecta com `ocpp1.6`, executa boot/heartbeat/status, recebe start re
 - Respostas OCPP repetidas sao persistidas, mas ainda nao existe politica automatica de retencao para `ocpp_messages`.
 - O simulador mantem estado em memoria e reinicia limpo.
 - Socket.IO usa memoria do processo; escala horizontal exigira adapter Redis ou broker.
-- A tarifa calcula energia, ativacao e tempo total como estacionamento simplificado; regras fiscais e meios de pagamento reais ainda nao foram integrados.
-- O identificador de pagamento `account-default` e apenas um contrato temporario.
+- A tarifa calcula energia, ativacao e tempo total como estacionamento simplificado; regras fiscais ainda nao foram integradas.
+- O provedor financeiro atual e mock; Pix e cartão reais dependem de homologacao e de um novo adaptador `PaymentGateway`.
 - Outbox e persistida, mas a entrega a um broker futuro ainda nao possui worker.

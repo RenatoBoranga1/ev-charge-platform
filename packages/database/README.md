@@ -34,3 +34,22 @@ A migracao `202607210001_ocpp16_adapter` adiciona identidade e protocolo ao char
 `ocpp_transactions` possui identidade de protocolo monotona, relacao unica com `charging_sessions`, optimistic locking por `version` e constraints para medidores nao negativos e `meter_stop_wh >= meter_start_wh`. A aplicacao tambem rejeita cada MeterValues regressivo antes do update.
 
 `ocpp_messages` usa a chave unica `(charge_point_id, direction, unique_id)` para devolver a mesma resposta a CALLs repetidos. O idTag efemero e persistido somente como SHA-256; a credencial Basic do carregador seed e armazenada com Argon2.
+
+## Persistência financeira
+
+A migração `20260729173735_payments_wallet_ledger_phase5` evolui a antiga tabela
+de pagamentos sem descartar dados e adiciona carteira, contas e lançamentos de
+partidas dobradas, reservas, intenções, métodos tokenizados, regras de recarga
+automática, recibos, estornos, webhooks e reconciliação.
+
+Constraints impedem valores negativos, moedas inválidas, captura superior ao
+permitido e mais de um método principal ativo. Índices únicos vinculam
+idempotência ao tenant e impedem uma segunda reserva ativa para a mesma sessão.
+Um trigger deferred confirma que cada `ledger_transaction` contabilizada possui
+débitos e créditos iguais. Outros triggers tornam transações e entries
+contabilizadas imutáveis; ajustes devem ser compensatórios.
+
+O seed financeiro é determinístico e pode ser executado repetidamente. Ele cria
+uma carteira, contas, lançamentos balanceados, método mascarado, regra desativada,
+intenção pendente, capturada, falha e estornada, sessão concluída e recibo. O
+schema e o seed nunca armazenam PAN, CVV ou segredo do webhook.
