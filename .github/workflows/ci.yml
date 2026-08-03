@@ -54,6 +54,7 @@ jobs:
       REDIS_URL: redis://localhost:6379
       RUN_DB_TESTS: "true"
       SEED_DEMO_DATA: "true"
+      SIMULATOR_SECRET: ci-simulator-secret-at-least-32-characters
 
     steps:
       - name: Checkout repository
