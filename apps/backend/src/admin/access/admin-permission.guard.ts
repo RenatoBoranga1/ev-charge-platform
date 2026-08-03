@@ -3,13 +3,13 @@ import {
   type ExecutionContext,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
   adminRoles,
   permissionsByRole,
   type AdminPermission,
-  type AdminRole,
 } from '@solis/admin-contracts';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -33,6 +33,10 @@ export class AdminPermissionGuard implements CanActivate {
     if (required === undefined) return true;
 
     const request = context.switchToHttp().getRequest<AdminRequest>();
+    if (!request.user) {
+      throw new UnauthorizedException('Autenticação administrativa obrigatória.');
+    }
+
     const membership = await this.prisma.operatorMembership.findFirst({
       include: { roleAssignments: true },
       where: {
@@ -51,9 +55,7 @@ export class AdminPermissionGuard implements CanActivate {
 
     const roles = membership.roleAssignments
       .map(({ role }) => role)
-      .filter((role): role is AdminRole =>
-        adminRoles.includes(role as AdminRole),
-      );
+      .filter((role) => adminRoles.includes(role));
     const permissions = [
       ...new Set(roles.flatMap((role) => permissionsByRole[role])),
     ];

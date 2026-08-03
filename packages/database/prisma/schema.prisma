@@ -349,6 +349,8 @@ model User {
   createdAt                  DateTime           @default(now()) @map("created_at")
   operatorMemberships       OperatorMembership[]
   remoteCommandsCreated     RemoteCommand[]       @relation("RemoteCommandCreator")
+  operatorRolesAssigned     OperatorRoleAssignment[] @relation("OperatorRoleAssigner")
+  tariffVersionsCreated     TariffVersion[]          @relation("TariffVersionCreator")
   isBlocked                 Boolean               @default(false) @map("is_blocked")
   blockedAt                 DateTime?             @map("blocked_at")
   blockedReason             String?               @map("blocked_reason")
@@ -1022,10 +1024,12 @@ model OperatorRoleAssignment {
   membership       OperatorMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   role             OperatorRole
   assignedByUserId String?            @map("assigned_by_user_id") @db.Uuid
+  assignedByUser   User?              @relation("OperatorRoleAssigner", fields: [assignedByUserId], references: [id], onDelete: SetNull)
   createdAt        DateTime           @default(now()) @map("created_at")
 
   @@unique([membershipId, role])
   @@index([role, createdAt])
+  @@index([assignedByUserId])
   @@map("operator_role_assignments")
 }
 
@@ -1042,10 +1046,12 @@ model TariffVersion {
   publishedAt     DateTime?               @map("published_at")
   archivedAt      DateTime?               @map("archived_at")
   createdByUserId String                  @map("created_by_user_id") @db.Uuid
+  createdByUser   User                    @relation("TariffVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   createdAt       DateTime                @default(now()) @map("created_at")
 
   @@unique([tariffId, versionNumber])
   @@index([tenantId, status, effectiveAt])
+  @@index([createdByUserId])
   @@map("tariff_versions")
 }
 

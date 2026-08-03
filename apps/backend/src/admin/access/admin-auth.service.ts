@@ -1,12 +1,14 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { AdminSession } from '@solis/admin-contracts';
+import {
+  permissionsByRole,
+  type AdminSession,
+} from '@solis/admin-contracts';
 
 import type { AuthUser } from '../../auth/auth-user';
 import { AuthService } from '../../auth/auth.service';
 import type { LoginDto } from '../../auth/dto/login.dto';
 import { PrismaService } from '../../database/prisma.service';
-import { AdminPermissionGuard } from './admin-permission.guard';
 
 @Injectable()
 export class AdminAuthService {
@@ -14,7 +16,6 @@ export class AdminAuthService {
     private readonly auth: AuthService,
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
-    private readonly permissionGuard: AdminPermissionGuard,
   ) {}
 
   async login(input: LoginDto): Promise<{
@@ -68,10 +69,7 @@ export class AdminAuthService {
     const roles = membership.roleAssignments.map(({ role }) => role);
     const permissions = [
       ...new Set(
-        roles.flatMap((role) => {
-          const normalized = role as keyof typeof import('@solis/admin-contracts').permissionsByRole;
-          return import('@solis/admin-contracts').permissionsByRole[normalized] ?? [];
-        }),
+        roles.flatMap((role) => permissionsByRole[role]),
       ),
     ];
     return {

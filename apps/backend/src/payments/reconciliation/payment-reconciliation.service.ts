@@ -17,12 +17,14 @@ export class PaymentReconciliationService {
     private readonly gateway: PaymentGateway,
   ) {}
 
-  async run(): Promise<{
+  async run(tenantId?: string): Promise<{
     locked: boolean;
     processed: number;
     mismatches: number;
   }> {
-    const lockKey = 'payments:reconciliation:global';
+    const lockKey = tenantId
+      ? 'payments:reconciliation:' + tenantId
+      : 'payments:reconciliation:global';
     const lockValue = randomUUID();
     const acquired = await this.redis.client.set(
       lockKey,
@@ -41,6 +43,7 @@ export class PaymentReconciliationService {
         where: {
           deletedAt: null,
           provider: this.gateway.provider,
+          ...(tenantId ? { tenantId } : {}),
           status: {
             in: [
               PaymentIntentStatus.PENDING,

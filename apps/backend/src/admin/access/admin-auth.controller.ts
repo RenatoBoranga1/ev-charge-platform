@@ -9,6 +9,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { randomBytes } from 'node:crypto';
 
@@ -41,6 +42,7 @@ export class AdminAuthController {
   constructor(private readonly adminAuth: AdminAuthService) {}
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('login')
   async login(
     @Body() input: LoginDto,
@@ -80,7 +82,7 @@ export class AdminAuthController {
   ): Promise<{ success: true }> {
     await this.adminAuth.logout(cookies(request)[refreshCookie]);
     response.clearCookie(refreshCookie, { path: '/v1/admin/auth' });
-    response.clearCookie(csrfCookie, { path: '/v1/admin/auth' });
+    response.clearCookie(csrfCookie, { path: '/' });
     return { success: true };
   }
 
@@ -102,7 +104,7 @@ export class AdminAuthController {
     response.cookie(csrfCookie, randomBytes(24).toString('base64url'), {
       httpOnly: false,
       maxAge: environment.refreshTokenTtlDays * 86_400_000,
-      path: '/v1/admin/auth',
+      path: '/',
       sameSite: 'strict',
       secure,
     });

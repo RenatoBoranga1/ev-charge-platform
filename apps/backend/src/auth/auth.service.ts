@@ -88,6 +88,7 @@ export class AuthService {
 
     if (
       !user ||
+      user.isBlocked ||
       user.deletedAt ||
       !(await argon2.verify(user.passwordHash, input.password))
     ) {
@@ -115,7 +116,7 @@ export class AuthService {
       });
       throw new UnauthorizedException('Reutilização de refresh token detectada.');
     }
-    if (stored.expiresAt <= new Date() || stored.user.deletedAt) {
+    if (stored.expiresAt <= new Date() || stored.user.deletedAt || stored.user.isBlocked) {
       throw new UnauthorizedException('Refresh token expirado.');
     }
 
@@ -146,6 +147,22 @@ export class AuthService {
       accessToken: await this.signAccessToken(stored.user),
       refreshToken: next.raw,
     };
+  }
+
+  async revokeRefreshToken(rawToken: string): Promise<void> {
+    const tokenId = rawToken.split('.', 1)[0];
+    if (!tokenId) return;
+    await this.prisma.refreshToken.updateMany({
+      data: { revokedAt: new Date() },
+      where: { id: tokenId, revokedAt: null },
+    });
+  }
+
+  async revokeAllRefreshTokens(userId: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      data: { revokedAt: new Date() },
+      where: { revokedAt: null, userId },
+    });
   }
 
   private async createSession(user: User): Promise<AuthSession> {
