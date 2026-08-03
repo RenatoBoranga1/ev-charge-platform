@@ -11,3 +11,5 @@ apps/mobile-driver/.expo/
 apps/mobile-driver/android/
 apps/mobile-driver/ios/
 apps/mobile-driver/dist/
+apps/admin-web/playwright-report/
+apps/admin-web/test-results/

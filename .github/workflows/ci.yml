@@ -17,7 +17,7 @@ jobs:
   quality:
     name: Lint, test and build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         image: postgis/postgis:16-3.5
@@ -43,6 +43,7 @@ jobs:
           --health-retries 20
     env:
       DATABASE_URL: postgresql://solis:solis@localhost:5432/solis?schema=public
+      DEMO_ADMIN_PASSWORD: solis-admin-demo
       DEMO_USER_PASSWORD: solis-demo
       JWT_ACCESS_SECRET: ci-secret-at-least-32-characters-long
       HISTORY_CURSOR_SECRET: ci-history-cursor-secret-at-least-32-characters
@@ -81,8 +82,47 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
       - name: Test with coverage
         run: pnpm test -- --coverage
 
       - name: Build
         run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @solis/admin-web exec playwright install --with-deps chromium
+
+      - name: Run admin browser E2E
+        run: pnpm --filter @solis/admin-web e2e
+
+      - name: Start backend and charger simulator
+        run: |
+          node apps/backend/dist/main.js > backend.log 2>&1 &
+          echo $! > backend.pid
+          node apps/charger-simulator/dist/index.js > charger-simulator.log 2>&1 &
+          echo $! > charger-simulator.pid
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://localhost:8000/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat backend.log
+          exit 1
+
+      - name: Run integrated E2E flows
+        run: |
+          pnpm e2e:charging
+          pnpm e2e:ocpp
+          pnpm e2e:payments
+          pnpm e2e:admin
+
+      - name: Upload service logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-logs
+          path: |
+            backend.log
+            charger-simulator.log
+          if-no-files-found: ignore
