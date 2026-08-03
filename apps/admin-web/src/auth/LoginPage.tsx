@@ -26,12 +26,13 @@ export function LoginPage() {
 
   if (session) return <Navigate replace to="/admin" />;
 
+  const locationState = location.state as unknown;
   const destination =
-    typeof location.state === 'object' &&
-    location.state !== null &&
-    'from' in location.state &&
-    typeof location.state.from === 'string'
-      ? location.state.from
+    typeof locationState === 'object' &&
+    locationState !== null &&
+    'from' in locationState &&
+    typeof locationState.from === 'string'
+      ? locationState.from
       : '/admin';
 
   async function submit(values: LoginForm): Promise<void> {
