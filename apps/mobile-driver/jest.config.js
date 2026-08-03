@@ -31,6 +31,7 @@ module.exports = {
   setupFiles: ['<rootDir>/jest.setup.js'],
   testMatch: ['**/__tests__/**/*.spec.ts', '**/__tests__/**/*.spec.tsx'],
   moduleNameMapper: {
+    '^@solis/design-tokens$': '<rootDir>/../../packages/design-tokens/src/index.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
   },
 };

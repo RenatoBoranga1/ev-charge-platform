@@ -25,14 +25,19 @@ function createContext(authorization?: string): {
 describe('JwtAuthGuard', () => {
   const verifyAsync = jest.fn();
   const getAllAndOverride = jest.fn();
+  const findFirst =
+    jest.fn<Promise<{ id: string } | null>, [unknown]>();
   const guard = new JwtAuthGuard(
     { verifyAsync } as unknown as JwtService,
     { getAllAndOverride } as unknown as Reflector,
+    { user: { findFirst } } as never,
   );
 
   beforeEach(() => {
     verifyAsync.mockReset();
     getAllAndOverride.mockReset();
+    findFirst.mockReset();
+    findFirst.mockResolvedValue({ id: 'user' });
   });
 
   it('allows routes explicitly marked public', async () => {
@@ -62,5 +67,24 @@ describe('JwtAuthGuard', () => {
     await expect(
       guard.canActivate(createContext('Bearer invalid').context),
     ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('rejects a valid token after the user is blocked', async () => {
+    getAllAndOverride.mockReturnValue(false);
+    verifyAsync.mockResolvedValue({ sub: 'user', tenantId: 'tenant' });
+    findFirst.mockResolvedValue(null);
+
+    await expect(
+      guard.canActivate(createContext('Bearer token').context),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(findFirst).toHaveBeenCalledWith({
+      select: { id: true },
+      where: {
+        deletedAt: null,
+        id: 'user',
+        isBlocked: false,
+        tenantId: 'tenant',
+      },
+    });
   });
 });

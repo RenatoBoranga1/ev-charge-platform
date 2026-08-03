@@ -71,9 +71,10 @@ services:
     environment:
       BACKEND_INTERNAL_URL: http://backend:8000
       CHARGER_SIMULATOR_URL: http://charger-simulator:8100
-      CORS_ORIGINS: http://localhost:8081,http://localhost:19006
+      CORS_ORIGINS: http://localhost:4173,http://localhost:8081,http://localhost:19006
       DATABASE_URL: postgresql://solis:solis@postgres:5432/solis?schema=public
       DEFAULT_TENANT_SLUG: solis
+      DEMO_ADMIN_PASSWORD: solis-admin-demo
       DEMO_USER_PASSWORD: solis-demo
       HISTORY_CURSOR_SECRET: local-compose-history-cursor-secret-change-me
       JWT_ACCESS_SECRET: local-compose-secret-change-before-production
@@ -130,6 +131,21 @@ services:
       retries: 20
       start_period: 30s
 
+  admin-web:
+    build:
+      context: .
+      dockerfile: apps/admin-web/Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "4173:8080"
+    restart: "on-failure:5"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 volumes:
   solis_postgres_data:
   solis_redis_data:

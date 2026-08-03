@@ -62,7 +62,7 @@ function oneOf<T extends string>(
 }
 
 function configuredCorsOrigins(value: string | undefined): string[] {
-  const origins = (value ?? 'http://localhost:8081,http://localhost:19006')
+  const origins = (value ?? 'http://localhost:4173,http://localhost:8081,http://localhost:19006')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);

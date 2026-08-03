@@ -1,6 +1,7 @@
 import * as argon2 from 'argon2';
 
 import {
+  AuditOutcome,
   ChargerProtocol,
   ConnectorStatus,
   CurrentType,
@@ -12,15 +13,22 @@ import {
   LedgerTransactionType,
   PaymentIntentStatus,
   PaymentIntentType,
+  PaymentReconciliationStatus,
   PaymentMethodStatus,
   PaymentMethodType,
   PlugType,
+  OperatorMembershipStatus,
+  OperatorRole,
   Prisma,
   PrismaClient,
   ProfileTheme,
   ReceiptStatus,
+  RemoteCommandStatus,
+  RemoteCommandType,
   RefundStatus,
   StationStatus,
+  TariffPublicationStatus,
+  UserRole,
   VehicleStatus,
   VehicleType,
   WalletReservationStatus,
@@ -30,6 +38,18 @@ import {
 const prisma = new PrismaClient();
 
 const ids = {
+  adminAudit: 'a0000000-0000-4000-8000-000000000001',
+  adminMembership: 'a0000000-0000-4000-8000-000000000002',
+  adminUser: 'a0000000-0000-4000-8000-000000000003',
+  demoOperatorUser: 'a0000000-0000-4000-8000-000000000004',
+  demoOperatorMembership: 'a0000000-0000-4000-8000-000000000005',
+  demoFinanceUser: 'a0000000-0000-4000-8000-000000000006',
+  demoFinanceMembership: 'a0000000-0000-4000-8000-000000000007',
+  demoViewerUser: 'a0000000-0000-4000-8000-000000000008',
+  demoViewerMembership: 'a0000000-0000-4000-8000-000000000009',
+  demoRemoteCommand: 'a0000000-0000-4000-8000-000000000010',
+  demoReconciliation: 'a0000000-0000-4000-8000-000000000011',
+  demoDraftTariff: 'a0000000-0000-4000-8000-000000000012',
   autoRecharge: 'b0000000-0000-4000-8000-000000000001',
   demoSession: 'b0000000-0000-4000-8000-000000000002',
   failedPayment: 'b0000000-0000-4000-8000-000000000003',
@@ -410,6 +430,167 @@ async function main(): Promise<void> {
       totalEnergyKwh: 86.42,
     },
   });
+  const adminPasswordHash = await argon2.hash(
+    process.env.DEMO_ADMIN_PASSWORD ??
+      process.env.DEMO_USER_PASSWORD ??
+      'solis-admin-demo',
+  );
+  const adminUser = await prisma.user.upsert({
+    where: {
+      tenantId_email: {
+        email: 'admin@solis.local',
+        tenantId: ids.tenant,
+      },
+    },
+    update: {
+      isBlocked: false,
+      name: 'Administrador Solis',
+      passwordHash: adminPasswordHash,
+      role: UserRole.ADMIN,
+    },
+    create: {
+      email: 'admin@solis.local',
+      id: ids.adminUser,
+      name: 'Administrador Solis',
+      passwordHash: adminPasswordHash,
+      phone: '+5511000000000',
+      role: UserRole.ADMIN,
+      tenantId: ids.tenant,
+    },
+  });
+  const adminMembership = await prisma.operatorMembership.upsert({
+    where: { id: ids.adminMembership },
+    update: {
+      acceptedAt: new Date(),
+      disabledAt: null,
+      disabledReason: null,
+      displayName: adminUser.name,
+      email: adminUser.email,
+      status: OperatorMembershipStatus.ACTIVE,
+      userId: adminUser.id,
+    },
+    create: {
+      acceptedAt: new Date(),
+      displayName: adminUser.name,
+      email: adminUser.email,
+      id: ids.adminMembership,
+      status: OperatorMembershipStatus.ACTIVE,
+      tenantId: ids.tenant,
+      userId: adminUser.id,
+    },
+  });
+  await prisma.operatorRoleAssignment.upsert({
+    where: {
+      membershipId_role: {
+        membershipId: adminMembership.id,
+        role: OperatorRole.TENANT_ADMIN,
+      },
+    },
+    update: { assignedByUserId: adminUser.id },
+    create: {
+      assignedByUserId: adminUser.id,
+      membershipId: adminMembership.id,
+      role: OperatorRole.TENANT_ADMIN,
+    },
+  });
+  const demoAdminAccounts = [
+    {
+      email: 'operacoes@solis.local',
+      membershipId: ids.demoOperatorMembership,
+      name: 'Operações Solis',
+      role: OperatorRole.STATION_OPERATOR,
+      userId: ids.demoOperatorUser,
+    },
+    {
+      email: 'financeiro@solis.local',
+      membershipId: ids.demoFinanceMembership,
+      name: 'Financeiro Solis',
+      role: OperatorRole.FINANCE_ANALYST,
+      userId: ids.demoFinanceUser,
+    },
+    {
+      email: 'viewer@solis.local',
+      membershipId: ids.demoViewerMembership,
+      name: 'Consulta Solis',
+      role: OperatorRole.VIEWER,
+      userId: ids.demoViewerUser,
+    },
+  ] as const;
+  for (const account of demoAdminAccounts) {
+    const demoUser = await prisma.user.upsert({
+      where: {
+        tenantId_email: { email: account.email, tenantId: ids.tenant },
+      },
+      update: {
+        isBlocked: false,
+        name: account.name,
+        passwordHash: adminPasswordHash,
+        role: UserRole.ADMIN,
+      },
+      create: {
+        email: account.email,
+        id: account.userId,
+        name: account.name,
+        passwordHash: adminPasswordHash,
+        role: UserRole.ADMIN,
+        tenantId: ids.tenant,
+      },
+    });
+    const membership = await prisma.operatorMembership.upsert({
+      where: { id: account.membershipId },
+      update: {
+        acceptedAt: new Date(),
+        disabledAt: null,
+        disabledReason: null,
+        displayName: account.name,
+        email: account.email,
+        status: OperatorMembershipStatus.ACTIVE,
+        userId: demoUser.id,
+      },
+      create: {
+        acceptedAt: new Date(),
+        displayName: account.name,
+        email: account.email,
+        id: account.membershipId,
+        status: OperatorMembershipStatus.ACTIVE,
+        tenantId: ids.tenant,
+        userId: demoUser.id,
+      },
+    });
+    await prisma.operatorRoleAssignment.upsert({
+      where: {
+        membershipId_role: {
+          membershipId: membership.id,
+          role: account.role,
+        },
+      },
+      update: { assignedByUserId: adminUser.id },
+      create: {
+        assignedByUserId: adminUser.id,
+        membershipId: membership.id,
+        role: account.role,
+      },
+    });
+  }
+
+  await prisma.auditLog.upsert({
+    where: { id: ids.adminAudit },
+    update: {
+      outcome: AuditOutcome.SUCCESS,
+      userId: adminUser.id,
+    },
+    create: {
+      action: 'ADMIN_SEED_CREATED',
+      actorType: 'SYSTEM',
+      after: { membershipId: adminMembership.id, role: 'TENANT_ADMIN' },
+      entityId: adminMembership.id,
+      entityType: 'OperatorMembership',
+      id: ids.adminAudit,
+      outcome: AuditOutcome.SUCCESS,
+      tenantId: ids.tenant,
+      userId: adminUser.id,
+    },
+  });
   await prisma.vehicle.upsert({
     where: { id: ids.vehicle },
     update: {
@@ -452,6 +633,65 @@ async function main(): Promise<void> {
         ? ocppAuthSecretHash
         : undefined,
     );
+  }
+  await prisma.tariff.upsert({
+    where: { id: ids.demoDraftTariff },
+    update: {
+      activationFee: 1,
+      archivedAt: null,
+      currency: 'BRL',
+      name: 'Tarifa administrativa em revisão',
+      parkingFeeHour: 0,
+      pricePerKwh: 1.75,
+      publicationStatus: TariffPublicationStatus.DRAFT,
+      publishedAt: null,
+      validUntil: null,
+    },
+    create: {
+      activationFee: 1,
+      currency: 'BRL',
+      id: ids.demoDraftTariff,
+      name: 'Tarifa administrativa em revisão',
+      operatorId: ids.operator,
+      parkingFeeHour: 0,
+      pricePerKwh: 1.75,
+      publicationStatus: TariffPublicationStatus.DRAFT,
+      publishedAt: null,
+      stationId: ids.stationOne,
+      validFrom: new Date('2026-08-01T00:00:00.000Z'),
+    },
+  });
+  const seededTariffs = await prisma.tariff.findMany({
+    where: {
+      deletedAt: null,
+      publicationStatus: TariffPublicationStatus.PUBLISHED,
+      station: { tenantId: ids.tenant },
+    },
+  });
+  for (const tariff of seededTariffs) {
+    const snapshot = {
+      currency: tariff.currency,
+      name: tariff.name,
+      pricePerKwh: tariff.pricePerKwh.toString(),
+      validFrom: tariff.validFrom.toISOString(),
+      validUntil: tariff.validUntil?.toISOString() ?? null,
+    };
+    await prisma.tariffVersion.upsert({
+      where: {
+        tariffId_versionNumber: { tariffId: tariff.id, versionNumber: 1 },
+      },
+      update: { snapshot, status: TariffPublicationStatus.PUBLISHED },
+      create: {
+        createdByUserId: adminUser.id,
+        effectiveAt: tariff.validFrom,
+        publishedAt: tariff.publishedAt ?? new Date(),
+        snapshot,
+        status: TariffPublicationStatus.PUBLISHED,
+        tariffId: tariff.id,
+        tenantId: ids.tenant,
+        versionNumber: 1,
+      },
+    });
   }
 
   await prisma.paymentPolicyConfig.upsert({
@@ -580,6 +820,39 @@ async function main(): Promise<void> {
       totalAmount: '12.34',
       userId: ids.user,
       vehicleId: ids.vehicle,
+    },
+  });
+  await prisma.remoteCommand.upsert({
+    where: {
+      tenantId_idempotencyKey: {
+        idempotencyKey: 'seed-admin-remote-stop',
+        tenantId: ids.tenant,
+      },
+    },
+    update: {
+      completedAt: demoCompletedAt,
+      status: RemoteCommandStatus.ACCEPTED,
+    },
+    create: {
+      chargePointId: stations[0]!.chargePointId,
+      chargingSessionId: ids.demoSession,
+      completedAt: demoCompletedAt,
+      connectorId: ids.connectorOne,
+      correlationId: 'seed-admin-command',
+      createdByUserId: adminUser.id,
+      id: ids.demoRemoteCommand,
+      idempotencyKey: 'seed-admin-remote-stop',
+      payload: { chargingSessionId: ids.demoSession },
+      queuedAt: demoStartedAt,
+      reason: 'Comando demonstrativo auditado',
+      requestHash: 'seed-admin-remote-stop',
+      result: { status: 'Accepted' },
+      sentAt: demoStartedAt,
+      stationId: ids.stationOne,
+      status: RemoteCommandStatus.ACCEPTED,
+      tenantId: ids.tenant,
+      timeoutAt: demoCompletedAt,
+      type: RemoteCommandType.REMOTE_STOP,
     },
   });
   await prisma.paymentMethod.upsert({
@@ -719,6 +992,29 @@ async function main(): Promise<void> {
       create: payment,
     });
   }
+  await prisma.paymentReconciliation.upsert({
+    where: { id: ids.demoReconciliation },
+    update: {
+      checkedAt: demoCompletedAt,
+      localAmountMinor: 1_234n,
+      localStatus: PaymentIntentStatus.CAPTURED,
+      providerAmountMinor: 1_234n,
+      providerStatus: PaymentIntentStatus.CAPTURED,
+      status: PaymentReconciliationStatus.MATCHED,
+    },
+    create: {
+      checkedAt: demoCompletedAt,
+      details: { source: 'deterministic-seed' },
+      id: ids.demoReconciliation,
+      localAmountMinor: 1_234n,
+      localStatus: PaymentIntentStatus.CAPTURED,
+      paymentIntentId: ids.sessionPayment,
+      providerAmountMinor: 1_234n,
+      providerStatus: PaymentIntentStatus.CAPTURED,
+      status: PaymentReconciliationStatus.MATCHED,
+      tenantId: ids.tenant,
+    },
+  });
   await prisma.walletReservation.upsert({
     where: { chargingSessionId: ids.demoSession },
     update: {

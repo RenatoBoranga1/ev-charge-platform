@@ -1,5 +1,13 @@
-import type { TextStyle, ViewStyle } from 'react-native';
+import type { ViewStyle } from 'react-native';
 
+import {
+  elevation,
+  type ElevationLevel,
+} from '@solis/design-tokens';
+
+export * from '@solis/design-tokens';
+
+/*
 export const palette = {
   primary: {
     50: '#F1F6FF',
@@ -162,6 +170,7 @@ export const elevation = {
 
 export type ElevationLevel = keyof typeof elevation;
 
+*/
 export const shadows: Record<ElevationLevel, ViewStyle> = {
   level0: {},
   level1: {
@@ -201,6 +210,7 @@ export const shadows: Record<ElevationLevel, ViewStyle> = {
   },
 };
 
+/*
 export const sizes = {
   minimumTouchTarget: 48,
   buttonHeight: 52,
@@ -385,3 +395,4 @@ export function createThemeColors(
 
 export const lightColors: AppColors = createThemeColors('light');
 export const darkColors: AppColors = createThemeColors('dark');
+*/

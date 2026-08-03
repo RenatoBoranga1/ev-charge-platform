@@ -234,6 +234,53 @@ enum OcppMessageDirection {
   CSMS_TO_CHARGE_POINT
 }
 
+enum OperatorMembershipStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+}
+
+enum OperatorRole {
+  TENANT_ADMIN
+  OPERATIONS_MANAGER
+  STATION_OPERATOR
+  FINANCE_ANALYST
+  SUPPORT_AGENT
+  VIEWER
+}
+
+enum TariffPublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum RemoteCommandType {
+  REMOTE_START
+  REMOTE_STOP
+  RESET
+  UNLOCK_CONNECTOR
+  CHANGE_AVAILABILITY
+  GET_CONFIGURATION
+}
+
+enum RemoteCommandStatus {
+  CREATED
+  QUEUED
+  SENT
+  ACCEPTED
+  REJECTED
+  TIMED_OUT
+  FAILED
+  CANCELLED
+}
+
+enum AuditOutcome {
+  SUCCESS
+  DENIED
+  FAILED
+}
+
 model Tenant {
   id                     String                  @id @default(uuid()) @db.Uuid
   name                   String
@@ -255,6 +302,10 @@ model Tenant {
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
   deletedAt              DateTime?               @map("deleted_at")
+  operatorMemberships    OperatorMembership[]
+  tariffVersions         TariffVersion[]
+  remoteCommands         RemoteCommand[]
+
   version                Int                     @default(1)
 
   @@index([deletedAt])
@@ -296,6 +347,14 @@ model User {
   autoRechargeRules          AutoRechargeRule[]
   auditLogs                  AuditLog[]
   createdAt                  DateTime           @default(now()) @map("created_at")
+  operatorMemberships       OperatorMembership[]
+  remoteCommandsCreated     RemoteCommand[]       @relation("RemoteCommandCreator")
+  operatorRolesAssigned     OperatorRoleAssignment[] @relation("OperatorRoleAssigner")
+  tariffVersionsCreated     TariffVersion[]          @relation("TariffVersionCreator")
+  isBlocked                 Boolean               @default(false) @map("is_blocked")
+  blockedAt                 DateTime?             @map("blocked_at")
+  blockedReason             String?               @map("blocked_reason")
+
   updatedAt                  DateTime           @updatedAt @map("updated_at")
   deletedAt                  DateTime?          @map("deleted_at")
   version                    Int                @default(1)
@@ -399,6 +458,7 @@ model Station {
   tariffs          Tariff[]
   reservations     Reservation[]
   chargingSessions ChargingSession[]
+  remoteCommands   RemoteCommand[]
   createdAt        DateTime                               @default(now()) @map("created_at")
   updatedAt        DateTime                               @updatedAt @map("updated_at")
   deletedAt        DateTime?                              @map("deleted_at")
@@ -426,6 +486,7 @@ model ChargePoint {
   chargingSessions   ChargingSession[]
   ocppTransactions   OcppTransaction[]
   ocppMessages       OcppMessage[]
+  remoteCommands     RemoteCommand[]
   createdAt          DateTime                    @default(now()) @map("created_at")
   updatedAt          DateTime                    @updatedAt @map("updated_at")
   deletedAt          DateTime?                   @map("deleted_at")
@@ -468,6 +529,7 @@ model Connector {
   reservations       Reservation[]
   chargingSessions   ChargingSession[]
   ocppTransactions   OcppTransaction[]
+  remoteCommands     RemoteCommand[]
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
   deletedAt          DateTime?         @map("deleted_at")
@@ -495,6 +557,10 @@ model Tariff {
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
   deletedAt        DateTime?         @map("deleted_at")
+  publicationStatus TariffPublicationStatus @default(PUBLISHED) @map("publication_status")
+  publishedAt       DateTime?               @default(now()) @map("published_at")
+  archivedAt        DateTime?               @map("archived_at")
+  versions          TariffVersion[]
   version          Int               @default(1)
 
   @@index([stationId, validFrom, validUntil])
@@ -557,6 +623,7 @@ model ChargingSession {
   paymentIntents     PaymentIntent[]
   walletReservations WalletReservation[]
   receipt            Receipt?
+  remoteCommands     RemoteCommand[]
   createdAt          DateTime              @default(now()) @map("created_at")
   updatedAt          DateTime              @updatedAt @map("updated_at")
   deletedAt          DateTime?             @map("deleted_at")
@@ -924,6 +991,109 @@ model PaymentReconciliation {
   @@map("payment_reconciliations")
 }
 
+model OperatorMembership {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  tenantId              String                   @map("tenant_id") @db.Uuid
+  tenant                Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId                String?                  @map("user_id") @db.Uuid
+  user                  User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email                 String
+  displayName           String                   @map("display_name")
+  status                OperatorMembershipStatus @default(INVITED)
+  invitationTokenHash   String?                  @unique @map("invitation_token_hash")
+  invitedAt             DateTime                 @default(now()) @map("invited_at")
+  invitationExpiresAt   DateTime?                @map("invitation_expires_at")
+  acceptedAt            DateTime?                @map("accepted_at")
+  disabledAt            DateTime?                @map("disabled_at")
+  disabledReason        String?                  @map("disabled_reason")
+  roleAssignments       OperatorRoleAssignment[]
+  createdAt             DateTime                 @default(now()) @map("created_at")
+  updatedAt             DateTime                 @updatedAt @map("updated_at")
+  deletedAt             DateTime?                @map("deleted_at")
+  version               Int                      @default(1)
+
+  @@unique([tenantId, email])
+  @@unique([tenantId, userId])
+  @@index([tenantId, status, deletedAt])
+  @@map("operator_memberships")
+}
+
+model OperatorRoleAssignment {
+  id               String             @id @default(uuid()) @db.Uuid
+  membershipId     String             @map("membership_id") @db.Uuid
+  membership       OperatorMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  role             OperatorRole
+  assignedByUserId String?            @map("assigned_by_user_id") @db.Uuid
+  assignedByUser   User?              @relation("OperatorRoleAssigner", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime           @default(now()) @map("created_at")
+
+  @@unique([membershipId, role])
+  @@index([role, createdAt])
+  @@index([assignedByUserId])
+  @@map("operator_role_assignments")
+}
+
+model TariffVersion {
+  id              String                  @id @default(uuid()) @db.Uuid
+  tenantId        String                  @map("tenant_id") @db.Uuid
+  tenant          Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tariffId        String                  @map("tariff_id") @db.Uuid
+  tariff          Tariff                  @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  versionNumber   Int                     @map("version_number")
+  status          TariffPublicationStatus
+  snapshot        Json
+  effectiveAt     DateTime                @map("effective_at")
+  publishedAt     DateTime?               @map("published_at")
+  archivedAt      DateTime?               @map("archived_at")
+  createdByUserId String                  @map("created_by_user_id") @db.Uuid
+  createdByUser   User                    @relation("TariffVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime                @default(now()) @map("created_at")
+
+  @@unique([tariffId, versionNumber])
+  @@index([tenantId, status, effectiveAt])
+  @@index([createdByUserId])
+  @@map("tariff_versions")
+}
+
+model RemoteCommand {
+  id                String              @id @default(uuid()) @db.Uuid
+  tenantId          String              @map("tenant_id") @db.Uuid
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  stationId         String?             @map("station_id") @db.Uuid
+  station           Station?            @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  chargePointId     String?             @map("charge_point_id") @db.Uuid
+  chargePoint       ChargePoint?        @relation(fields: [chargePointId], references: [id], onDelete: Restrict)
+  connectorId       String?             @map("connector_id") @db.Uuid
+  connector         Connector?          @relation(fields: [connectorId], references: [id], onDelete: Restrict)
+  chargingSessionId String?             @map("charging_session_id") @db.Uuid
+  chargingSession   ChargingSession?    @relation(fields: [chargingSessionId], references: [id], onDelete: Restrict)
+  createdByUserId   String              @map("created_by_user_id") @db.Uuid
+  createdByUser     User                @relation("RemoteCommandCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  type              RemoteCommandType
+  status            RemoteCommandStatus @default(CREATED)
+  idempotencyKey    String              @map("idempotency_key")
+  requestHash       String              @map("request_hash")
+  reason            String
+  payload           Json?
+  result            Json?
+  errorCode         String?             @map("error_code")
+  errorMessage      String?             @map("error_message")
+  correlationId     String              @map("correlation_id")
+  timeoutAt         DateTime            @map("timeout_at")
+  queuedAt          DateTime?           @map("queued_at")
+  sentAt            DateTime?           @map("sent_at")
+  completedAt       DateTime?           @map("completed_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  version           Int                 @default(1)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, createdAt])
+  @@index([chargePointId, status, createdAt])
+  @@index([chargingSessionId, createdAt])
+  @@map("remote_commands")
+}
+
 model AuditLog {
   id            String   @id @default(uuid()) @db.Uuid
   tenantId      String   @map("tenant_id") @db.Uuid
@@ -936,6 +1106,12 @@ model AuditLog {
   correlationId String?  @map("correlation_id")
   before        Json?
   after         Json?
+  actorType     String       @default("USER") @map("actor_type")
+  ipAddress     String?      @map("ip_address")
+  userAgent     String?      @map("user_agent")
+  justification String?
+  outcome       AuditOutcome @default(SUCCESS)
+  result        Json?
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@index([tenantId, entityType, entityId, createdAt])
