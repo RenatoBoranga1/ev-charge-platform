@@ -7,12 +7,16 @@ module.exports = {
     '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
   },
   moduleNameMapper: {
+    '^@solis/admin-contracts$': '<rootDir>/../../packages/admin-contracts/src/index.ts',
     '^@solis/database$': '<rootDir>/../../packages/database/src/index.ts',
   },
   collectCoverageFrom: [
     'src/charging/domain/*.ts',
     'src/charging/charging-realtime.gateway.ts',
     'src/auth/jwt-auth.guard.ts',
+    'src/admin/access/admin-auth.service.ts',
+    'src/admin/access/admin-permission.guard.ts',
+    'src/admin/audit/admin-audit.service.ts',
     'src/common/correlation-id.middleware.ts',
     'src/charging/gateway/charger-event-relay.ts',
     'src/charging/gateway/ocpp16-charger.gateway.ts',

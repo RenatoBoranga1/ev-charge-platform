@@ -8,9 +8,11 @@
     "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test"
+    "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "@vitest/coverage-v8": "4.0.15",
+    "typescript": "^5.9.2",
+    "vitest": "4.0.15"
   }
 }
