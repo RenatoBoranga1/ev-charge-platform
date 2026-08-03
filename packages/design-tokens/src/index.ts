@@ -1,13 +1,3 @@
-import type { ViewStyle } from 'react-native';
-
-import {
-  elevation,
-  type ElevationLevel,
-} from '@solis/design-tokens';
-
-export * from '@solis/design-tokens';
-
-/*
 export const palette = {
   primary: {
     50: '#F1F6FF',
@@ -119,9 +109,9 @@ export const typography = {
 const text = (
   fontSize: number,
   lineHeight: number,
-  fontWeight: TextStyle['fontWeight'],
+  fontWeight: '400' | '700' | '800',
   letterSpacing = 0,
-): TextStyle => ({ fontSize, lineHeight, fontWeight, letterSpacing });
+) => ({ fontSize, lineHeight, fontWeight, letterSpacing });
 
 export const typeScale = {
   displayLarge: text(57, 64, '400', -0.25),
@@ -170,47 +160,6 @@ export const elevation = {
 
 export type ElevationLevel = keyof typeof elevation;
 
-*/
-export const shadows: Record<ElevationLevel, ViewStyle> = {
-  level0: {},
-  level1: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: elevation.level1,
-  },
-  level2: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: elevation.level2,
-  },
-  level3: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: elevation.level3,
-  },
-  level4: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.14,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: elevation.level4,
-  },
-  level5: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: elevation.level5,
-  },
-};
-
-/*
 export const sizes = {
   minimumTouchTarget: 48,
   buttonHeight: 52,
@@ -381,18 +330,20 @@ export function createThemeColors(
 ): AppColors {
   const dynamic = dynamicSeeds[seed];
   const base = scheme === 'dark' ? darkBase : lightBase;
-
   return {
     ...base,
     primary: scheme === 'dark' ? dynamic.darkPrimary : dynamic.primary,
-    primaryPressed: scheme === 'dark' ? dynamic.darkPrimaryPressed : dynamic.primaryPressed,
-    primaryContainer: scheme === 'dark' ? dynamic.darkPrimaryContainer : dynamic.primaryContainer,
+    primaryPressed:
+      scheme === 'dark' ? dynamic.darkPrimaryPressed : dynamic.primaryPressed,
+    primaryContainer:
+      scheme === 'dark' ? dynamic.darkPrimaryContainer : dynamic.primaryContainer,
     onPrimaryContainer:
-      scheme === 'dark' ? dynamic.darkOnPrimaryContainer : dynamic.onPrimaryContainer,
+      scheme === 'dark'
+        ? dynamic.darkOnPrimaryContainer
+        : dynamic.onPrimaryContainer,
     focus: scheme === 'dark' ? dynamic.darkPrimaryPressed : dynamic.primary,
   };
 }
 
 export const lightColors: AppColors = createThemeColors('light');
 export const darkColors: AppColors = createThemeColors('dark');
-*/

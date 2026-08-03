@@ -11,6 +11,7 @@
     "build": "expo export --platform android --output-dir dist",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "@solis/design-tokens": "workspace:*",
     "test": "jest --runInBand"
   },
   "dependencies": {
