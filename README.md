@@ -5,9 +5,12 @@ Monorepo da plataforma de recarga de veículos elétricos Solis. O aplicativo Ex
 ## Arquitetura
 
 - `apps/mobile-driver`: aplicativo Expo/React Native do motorista, com modos de API `mock` e `api`.
+- `apps/admin-web`: portal React/Vite para operadores, com sessão segura, RBAC tenant-scoped e identidade Solis.
 - `apps/backend`: API NestJS versionada em `/v1`, organizada por módulos de domínio.
 - `packages/database`: schema, migrações, seed e cliente Prisma compartilhado.
-- `docker-compose.yml`: PostGIS, Redis, backend e Mailpit.
+- `packages/admin-contracts`: papéis, permissões e contratos administrativos neutros.
+- `packages/design-tokens`: tokens Solis compartilhados entre web e mobile.
+- `docker-compose.yml`: PostGIS, Redis, backend, simulador, portal administrativo e Mailpit.
 - `.github/workflows/ci.yml`: lint, typecheck, testes com cobertura e build.
 
 O backend permanece um único deploy. As fronteiras modulares, o contrato `OutboxPublisher` e a tabela `outbox_events` preservam o caminho para extração futura sem introduzir Kafka nesta fase.
@@ -51,12 +54,13 @@ O container do backend aguarda PostGIS e Redis, aplica as migrações, executa o
 
 - Health check: `http://localhost:8000/health`
 - Swagger: `http://localhost:8000/docs`
+- Portal administrativo: `http://localhost:4173`
 - Mailpit: `http://localhost:8025`
 - PostgreSQL/PostGIS: `localhost:5432`
 - Redis: `localhost:6379`
 - OCPP 1.6J WebSocket: `ws://localhost:9000/ocpp/{chargePointIdentity}` com subprotocolo `ocpp1.6`
 
-O seed de demonstração só é executado quando `SEED_DEMO_DATA=true`. No Compose, ele cria `marina.souza@example.com` com a senha definida em `DEMO_USER_PASSWORD`.
+O seed de demonstração só é executado quando `SEED_DEMO_DATA=true`. No Compose, ele cria `marina.souza@example.com` com a senha definida em `DEMO_USER_PASSWORD` e o operador `admin@solis.local` com `DEMO_ADMIN_PASSWORD`.
 
 ## Endpoints iniciais
 
@@ -136,6 +140,28 @@ isso, o PR da fase continua em draft. Consulte
 
 O QR em JSON carrega a hierarquia completa. Deep links carregam somente `connectorId`; o backend resolve connector, EVSE, charge point e estação e rejeita hierarquias divergentes.
 
+## Portal administrativo
+
+O portal B2B é servido separadamente do mobile. O access token administrativo
+permanece somente em memória; o refresh rotativo usa cookie HttpOnly e proteção
+CSRF. Papéis e permissões são derivados do `OperatorMembership` ativo no tenant,
+e toda autorização é repetida no backend.
+
+    pnpm --filter @solis/admin-web dev
+    pnpm --filter @solis/admin-web test -- --coverage
+    pnpm --filter @solis/admin-web e2e
+    pnpm e2e:admin
+
+Os endpoints usam `/v1/admin`, incluindo autenticação, dashboard, mapa, estações,
+hierarquia de recarga, tarifas versionadas, sessões, comandos remotos,
+motoristas, pagamentos/estornos, conciliação, operadores, auditoria e CSV. O
+Swagger em `/docs` contém o contrato executável.
+
+A arquitetura, papéis, procedimentos e ameaças estão documentados em
+`docs/architecture/adr-011-admin-operations-portal.md`, `docs/admin` e
+`docs/security/admin-portal-threat-model.md`. O PR permanece draft enquanto as
+limitações registradas no ADR-011 não forem eliminadas ou formalmente aceitas.
+
 ## Banco de dados
 
     pnpm db:generate
@@ -149,7 +175,7 @@ A migração habilita PostGIS, mantém latitude/longitude para interoperabilidad
 
     pnpm lint
     pnpm typecheck
-    pnpm test -- --coverage
+    pnpm test -- -- --coverage
     pnpm build
 
 A cobertura mínima inicial é 80% para statements, 70% para branches, 75% para functions e 80% para lines.
@@ -212,6 +238,13 @@ limitações.
 
 ## Limitacoes atuais
 
+- O portal administrativo ainda não expõe CRUD visual completo de charge
+  points/EVSEs/conectores, restauração de estação, resolução manual de
+  conciliação ou ciclo completo de convites.
+- O realtime administrativo usa polling controlado; Socket.IO continua sendo
+  usado apenas no fluxo de recarga existente.
+- Somente Remote Start e Remote Stop são executáveis pelo portal; os demais
+  comandos permanecem bloqueados até suporte comprovado no adaptador.
 - O adaptador cobre o recorte minimo solicitado de OCPP 1.6J, nao e uma implementacao completa nem certificada pela Open Charge Alliance.
 - TLS/mTLS deve terminar em proxy ou load balancer na producao; o Compose local expoe WebSocket sem TLS.
 - Conexoes e comandos pendentes OCPP residem em memoria de uma instancia. Escala horizontal exigira ownership distribuido e roteamento de comandos por broker ou Redis.
